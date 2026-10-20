@@ -97,3 +97,18 @@ test('실제 백분율·서로 다른 날·여러 이동은 원으로 변환하�
  assert.equal(ctx.parseOCR('결제금액 18,700원\n할인율 100%').amount,18700);
  assert.deepEqual(Array.from(ctx.receiptAmounts('100%',true)),[]);
 });
+
+test('교통 내역의 물음표 단위와 깨진 보조 인식을 제한적으로 보정',()=>{
+ const first='이용내역\n최근\n버스ㆍ지하철\n월상세\n청구\n02/12 15:40\n100?\n가역\n02/12 15:15\n나역\n1,550원';
+ const second='= 이용내역\n최근 버스지하철 월상세 청구\nalee 15:40 1002!\n0212 15:15 1,5502!';
+ for(const input of [first,first+'\n[보조 인식]\n'+second,first.replace('100?','１００？')]){
+  const result=ctx.parseOCR(input);assert.equal(result.amount,1650);assert.equal(result.method,'지하철');
+  assert.deepEqual(Array.from(result.fares),[1550,100]);assert.match(result.notes.join(' '),/\?로 읽힌/);
+ }
+});
+test('물음표만 있거나 숫자까지 손상되면 금액을 추정하지 않음',()=>{
+ const base='버스ㆍ지하철\n02/12 15:40\n가역\n100?\n02/12 15:15\n나역\n1,550원';
+ for(const text of [base.replace('1,550원','1550'),base.replace('1,550원','1550?'),base.replace('100?','1002!'),base.replace('02/12 15:15','02/11 15:15'),base.replace('가역','')])assert.equal(ctx.parseOCR(text).amount,'',text);
+ for(const text of ['100?','1002!','1,5502!'])assert.deepEqual(Array.from(ctx.receiptAmounts(text,true)),[]);
+ assert.equal(ctx.parseOCR('결제금액 100?').amount,'');
+});
