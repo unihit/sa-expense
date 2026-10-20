@@ -6,7 +6,7 @@
 <title>SA 개인경비 · 영수증 정리</title>
 <link rel="icon" type="image/svg+xml" href="brand-mark.svg">
 <link rel="preload" href="vendor/fonts/NotoSansKR-Regular.woff" as="font" type="font/woff" crossorigin>
-<link rel="stylesheet" href="app.css?v=20261020-brand-receipt">
+<link rel="stylesheet" href="app.css?v=20261020-support-cards">
 <script defer src="vendor/jszip.min.js"></script><script defer src="vendor/tesseract.min.js"></script><script type="module" src="app.js?v=20261020-clipboard-upload"></script>
 </head>
 <body>
@@ -14,8 +14,8 @@
   <a class="brand" href="#"><img class="brand-mark" src="brand-mark.svg" width="44" height="44" alt="" aria-hidden="true"><span>SA EXPENSE<small>나의 업무, 깔끔한 정산</small></span></a>
   <div class="workspace-label">MY WORKSPACE</div>
   <nav aria-label="주 메뉴"><button class="nav-item active" data-view="ledger"><i data-icon="grid"></i><span class="nav-label">경비 내역</span><span class="nav-count" id="navCount">0</span></button><button class="nav-item" data-view="receipts"><i data-icon="image"></i><span class="nav-label">영수증 모아보기</span></button><button class="nav-item" id="navBackup"><i data-icon="archive"></i><span class="nav-label">백업·복원</span></button><button class="nav-item" id="navSettings"><i data-icon="settings"></i><span class="nav-label">설정</span></button></nav>
-  <div class="sidebar-note"><span class="small-leaf">✦</span><strong>복잡한 설치 없이,<br>정산에만 집중하세요.</strong><p>사진을 추가하고 내용을 확인하면<br>제출 파일이 완성됩니다.</p><button id="guideBtn">간단 사용법 <span>↗</span></button></div>
-  <div class="profile"><div class="avatar">SA</div><div><strong id="profileName">나의 경비 공간</strong><span>개인 워크스페이스</span></div><span class="online-dot"></span></div>
+  <div class="sidebar-note support-card"><div class="support-heading"><span class="support-icon" aria-hidden="true"><i data-icon="sheet"></i></span><strong>정산에만<br>집중하세요</strong></div><p>영수증을 추가하고 확인하면<br>제출 파일이 완성됩니다.</p><button id="guideBtn" class="support-action"><span>간단 사용법</span><i data-icon="chevronRight" aria-hidden="true"></i></button></div>
+  <div class="profile"><div class="avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/></svg></div><div class="profile-copy"><strong id="profileName">나의 경비 공간</strong><span>개인 워크스페이스</span></div></div>
 </aside>
 <main>
  <header class="topbar"><div class="crumb">내 워크스페이스 <span>/</span> <strong>개인경비</strong></div><div class="local-badge"><span></span>이 브라우저에 저장</div></header>
@@ -29,7 +29,7 @@
    <div id="dropZone" class="dropzone" tabindex="0" role="button" aria-label="영수증 파일 추가"><div class="upload-symbol"><i data-icon="upload"></i></div><strong>영수증을 여기에 놓아주세요</strong><p>클릭해서 사진·PDF 선택 또는 이미지 복사 후 Ctrl+V</p><small>PNG, JPG, WEBP, PDF · 파일당 최대 20MB · 추가하면 자동 인식</small></div>
    <div id="tableArea" class="table-area" hidden><table class="expense-table"><colgroup><col class="col-number"><col class="col-date"><col class="col-purpose"><col class="col-method"><col class="col-amount"><col class="col-proof"><col class="col-edit"></colgroup><thead><tr><th class="numcol">번호</th><th>사용일</th><th>업무 목적 / 이동구간</th><th>이용수단</th><th class="right">금액</th><th class="center">증빙</th><th class="center">수정</th></tr></thead><tbody id="expenseRows"></tbody></table></div>
    <div id="receiptGrid" class="receipt-grid" hidden></div><div class="panel-footer"><span id="resultCaption">영수증을 추가하거나 직접 입력해 시작하세요.</span><span>KRW · 원</span></div>
-  </section><aside class="context-column"><div class="workflow"><div class="section-kicker">QUICK GUIDE</div><h3>정산까지 세 단계</h3><ol><li><span>01</span><div><strong>영수증 추가</strong><p>사진이나 이용내역을 모아요.</p></div></li><li><span>02</span><div><strong>내용 확인 후 저장</strong><p>금액과 업무 목적을 확인해요.</p></div></li><li><span>03</span><div><strong>엑셀·JPEG 다운로드</strong><p>회사 양식 그대로 제출해요.</p></div></li></ol></div><div class="storage-note"><div class="note-icon"><i data-icon="lock"></i></div><h3>내 영수증은 내 브라우저에</h3><p>입력 내역과 영수증은 이 기기에 보관합니다. 다른 기기로 옮기거나 브라우저 데이터를 지우기 전, 백업해 주세요.</p><button id="backupInfo">백업·복원 열기 <span>→</span></button><div id="downloadArea" class="download-area" aria-label="최근 생성한 파일"></div></div></aside></div>
+  </section><aside class="context-column"><div class="workflow support-card"><div class="support-heading"><span class="support-icon" aria-hidden="true"><i data-icon="list"></i></span><div><span class="support-eyebrow">이용 가이드</span><h3>정산까지 세 단계</h3></div></div><ol><li><span class="step-symbol" aria-hidden="true"><i data-icon="upload"></i></span><div><strong>영수증 추가</strong><p>사진 선택 또는 붙여넣기</p></div></li><li><span class="step-symbol" aria-hidden="true"><i data-icon="check"></i></span><div><strong>내용 확인 후 저장</strong><p>날짜·금액·목적을 확인해요.</p></div></li><li><span class="step-symbol" aria-hidden="true"><i data-icon="sheet"></i></span><div><strong>엑셀·JPEG 다운로드</strong><p>정리된 파일을 제출해요.</p></div></li></ol></div><div class="storage-note support-card"><div class="support-heading"><span class="support-icon" aria-hidden="true"><i data-icon="lock"></i></span><h3>내 브라우저에 보관</h3></div><p>내역과 영수증은 이 기기에 저장됩니다. 기기를 옮기거나 브라우저 데이터를 지우기 전에 백업해 주세요.</p><button id="backupInfo" class="support-action"><span>백업·복원 열기</span><i data-icon="chevronRight" aria-hidden="true"></i></button><div id="downloadArea" class="download-area" aria-label="최근 생성한 파일"></div></div></aside></div>
   <footer class="page-footer"><span>SA EXPENSE</span><p>업무 경비를 위한 작은 정리 습관.</p><span>LOCAL FIRST</span></footer>
  </section>
 </main>

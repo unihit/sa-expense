@@ -166,3 +166,42 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
 
 /* Receipt and completion brand mark. */
 .brand-mark{display:block;width:44px;height:44px;flex:none;border-radius:13px;object-fit:contain}@media(max-width:800px){.brand-mark{width:34px;height:34px;border-radius:10px}}
+
+/* Integrated guidance cards: one icon scale, shared heading alignment and clear actions. */
+.support-card{border:1px solid #e2e8df;border-radius:14px;background:#fff}
+.support-heading{display:flex;align-items:center;gap:11px;min-width:0}
+.support-icon{display:grid;place-items:center;width:36px;height:36px;flex:0 0 36px;border:1px solid #dfe8da;border-radius:11px;background:#edf3e8;color:#426044}
+.support-icon i,.step-symbol i{display:flex;align-items:center;justify-content:center}
+.support-icon svg{width:19px;height:19px;stroke-width:1.8}
+.support-action{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:40px;border-top:1px solid #e0e7dc;padding:12px 0 0;margin-top:15px;gap:10px;color:#36553a;font-size:13px;font-weight:700;text-align:left}
+.support-action svg{width:16px;height:16px;transition:transform .15s}
+.support-action:hover{color:#213d28}
+.support-action:hover svg{transform:translateX(2px)}
+.sidebar-note.support-card{padding:17px 16px 14px;background:#f5f7f0;border-color:#e8eddf;border-radius:14px;margin-bottom:20px}
+.sidebar-note .support-heading strong{font-size:15px;line-height:1.6;font-weight:700;letter-spacing:-.25px}
+.sidebar-note.support-card p{font-size:13px;line-height:1.85;color:#67755f;margin:13px 0 0}
+.sidebar-note .support-action{font-size:13px;padding:12px 0 0;margin-top:14px}
+.profile{gap:11px;padding:18px 0 22px;border-color:#e6ebe3}
+.profile .avatar{width:38px;height:38px;border-radius:12px;background:#eef3e9;color:#5a7352;flex:none}
+.profile .avatar svg{width:21px;height:21px;stroke-width:1.65}
+.profile-copy{min-width:0}
+.profile .profile-copy strong{font-size:14px;line-height:1.5;color:#304736;font-weight:700;overflow-wrap:anywhere}
+.profile .profile-copy>span{font-size:12px;line-height:1.6;color:#71816a;margin-top:3px}
+.context-column{display:flex;flex-direction:column;gap:16px}
+.context-column .workflow.support-card{padding:18px 16px}
+.context-column .support-heading h3{font-size:14px;line-height:1.55;letter-spacing:-.25px;color:#304736;font-weight:700;margin:0}
+.support-eyebrow{display:block;font-size:11px;line-height:1.5;letter-spacing:0;color:#77866f;margin-bottom:2px}
+.workflow ol{display:grid;gap:19px;margin:22px 0 0;padding:0}
+.workflow li{position:relative;display:grid;grid-template-columns:34px minmax(0,1fr);gap:11px;margin:0;align-items:start}
+.workflow li:not(:last-child)::after{content:"";position:absolute;left:16px;top:39px;bottom:-14px;border-left:1px solid #dfe7d9}
+.workflow li>.step-symbol{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;border:1px solid #e2e9dd;background:#f7f9f3;color:#58744f;font-size:inherit}
+.step-symbol svg{width:17px;height:17px;stroke-width:1.8}
+.workflow li strong{font-size:13px;line-height:1.6;font-weight:700;color:#39543b;margin:0}
+.workflow li p{font-size:13px;line-height:1.7;color:#687960;margin:4px 0 0;word-break:keep-all;overflow-wrap:anywhere}
+.context-column .storage-note.support-card{padding:17px 16px 15px;margin:0;background:#f4f7f0;border-color:#e3eadd}
+.storage-note .support-icon{width:32px;height:32px;flex-basis:32px;border-radius:10px;background:#e9f0e2}
+.storage-note .support-icon svg{width:17px;height:17px}
+.storage-note.support-card>p{font-size:13px;line-height:1.9;color:#687960;margin:13px 0 0}
+.storage-note .support-action{font-size:13px;color:#36553a;padding:12px 0 0;margin-top:14px}
+@media(max-width:1200px){.context-column{display:none}.context-column.has-download{display:flex}.context-column.has-download .workflow{display:none}.sidebar-note.support-card{padding:15px 13px}.sidebar-note .support-heading{gap:9px}.sidebar-note .support-icon{width:32px;height:32px;flex-basis:32px}.sidebar-note .support-heading strong{font-size:14px}}
+@media(max-width:800px){.sidebar-note.support-card,.profile{display:none}}
