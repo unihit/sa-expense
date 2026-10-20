@@ -20,6 +20,34 @@ test('100 MB warns even for recent data, with exact size boundary',()=>{
  const result=status({},1,100*MB);
  assert.equal(result.large,true);assert.equal(result.overdue,false);assert.equal(result.megabytes,100);
 });
+test('150 MB full backup warns only when another 100 MB has accumulated',()=>{
+ const state={lastBackupAt:now-2*DAY,lastBackupBytes:150*MB,backupRevision:'older'};
+ assert.equal(status(state,2,150*MB+1),null);
+ assert.equal(status(state,2,250*MB-1),null);
+ const result=status(state,2,250*MB);
+ assert.equal(result.large,true);assert.equal(result.megabytes,100);
+});
+test('new full backup resets growth; deleting data cannot create a size warning',()=>{
+ const state={lastBackupAt:now-DAY,lastBackupBytes:250*MB,backupRevision:'older'};
+ assert.equal(status(state,2,250*MB+1),null);
+ assert.equal(status(state,2,100*MB),null);
+ assert.equal(status(state,2,349*MB),null);
+ assert.equal(status(state,2,350*MB).megabytes,100);
+});
+test('legacy backup without saved size avoids false size alerts but retains age alerts',()=>{
+ assert.equal(status({lastBackupAt:now-DAY},2,200*MB),null);
+ const result=status({lastBackupAt:now-31*DAY},2,200*MB);
+ assert.equal(result.overdue,true);assert.equal(result.large,false);
+});
+test('migration saves the current size once without changing backup age or revision',async()=>{
+ const writes=[];
+ const ctx=vm.createContext({Number,backupReminder:{id:'backupReminder',lastBackupAt:now-DAY,revision:'new',backupRevision:'old'},backupBytes:150*MB,async writeStore(name,items){writes.push(items[0]);},renderBackupReminder(){}});
+ vm.runInContext(source.slice(source.indexOf('async function migrateBackupSize('),source.indexOf('\nfunction render(){')),ctx);
+ await ctx.migrateBackupSize();assert.equal(ctx.backupReminder.lastBackupBytes,150*MB);
+ assert.equal(ctx.backupReminder.lastBackupAt,now-DAY);assert.equal(ctx.backupReminder.revision,'new');
+ ctx.backupBytes=200*MB;await ctx.migrateBackupSize();assert.equal(ctx.backupReminder.lastBackupBytes,150*MB);assert.equal(writes.length,1);
+ ctx.backupReminder={lastBackupAt:0};await ctx.migrateBackupSize();assert.equal(writes.length,1);
+});
 test('empty or unchanged backed-up data does not repeatedly warn',()=>{
  assert.equal(status({startedAt:now-90*DAY},0,200*MB),null);
  assert.equal(status({backupRevision:'new',lastBackupAt:now-90*DAY},2,200*MB),null);
@@ -55,6 +83,7 @@ test('full backup contains all records and records the backed-up revision',async
  const data=JSON.parse(await f.downloads[0].blob.text());
  assert.equal(data.expenses.length,2);assert.equal(data.format,'sa-expense-web');
  assert.equal(f.ctx.backupReminder.backupRevision,'current');assert.ok(f.ctx.backupReminder.lastBackupAt>0);
+ assert.equal(f.ctx.backupReminder.lastBackupBytes,new Blob([JSON.stringify({settings:data.settings,expenses:data.expenses})]).size);
  assert.equal(f.writes[0].items[0].snoozedUntil,0);
 });
 test('a failed download or metadata save does not mark the backup as recorded',async()=>{

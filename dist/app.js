@@ -26,7 +26,7 @@ function hydrateIcons(root=document) { root.querySelectorAll('[data-icon]').forE
 hydrateIcons();
 const NS='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 let db, all=[], settings={name:'',title:''}, view='ledger', filter='all', queue=[], editing=null, pendingImage='', pendingDigest='', worker=null, ocrBusy=false;
-let backupReminder={id:'backupReminder',revision:'initial',startedAt:Date.now(),lastBackupAt:0,backupRevision:null,snoozedUntil:0},backupBytes=0;
+let backupReminder={id:'backupReminder',revision:'initial',startedAt:Date.now(),lastBackupAt:0,lastBackupBytes:null,backupRevision:null,snoozedUntil:0},backupBytes=0;
 let toastTimer,monthPickerYear=new Date().getFullYear();
 function toast(message) { $('toast').textContent=message; $('toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('show'),6000); }
 function showError(error) {console.error(error);toast(error.message||String(error));}
@@ -49,20 +49,29 @@ function backupReminderStatus(count,bytes,state,now=Date.now()){
  if(!count||state.backupRevision===state.revision||now<state.snoozedUntil)return null;
  const baseline=state.lastBackupAt||state.startedAt;
  const days=Math.max(0,Math.floor((now-baseline)/86400000));
- const overdue=days>=30,large=bytes>=100*1024*1024;
- return overdue||large?{days,overdue,large,megabytes:Math.ceil(bytes/1024/1024)}:null;
+ const baseBytes=state.lastBackupAt?(Number.isFinite(state.lastBackupBytes)&&state.lastBackupBytes>=0?state.lastBackupBytes:bytes):0;
+ const addedBytes=Math.max(0,bytes-baseBytes);
+ const overdue=days>=30,large=addedBytes>=100*1024*1024;
+ return overdue||large?{days,overdue,large,megabytes:Math.ceil(addedBytes/1024/1024)}:null;
 }
 function renderBackupReminder(){
  const host=$('backupReminder');if(!host)return;
  const status=backupReminderStatus(all.length,backupBytes,backupReminder);host.hidden=!status;if(!status)return;
  const reasons=[];
  if(status.overdue)reasons.push(backupReminder.lastBackupAt?'마지막 백업 후 '+status.days+'일이 지났습니다.':'백업 없이 자료를 보관한 지 '+status.days+'일이 지났습니다.');
- if(status.large)reasons.push('저장된 경비·영수증 데이터가 약 '+status.megabytes+'MB입니다.');
+ if(status.large)reasons.push(backupReminder.lastBackupAt?'마지막 백업 이후 저장 데이터가 약 '+status.megabytes+'MB 늘었습니다.':'백업하지 않은 저장 데이터가 약 '+status.megabytes+'MB입니다.');
  $('backupReminderText').textContent=reasons.join(' ')+' 아직 백업하지 않은 변경 내용이 있습니다. 모든 월의 내역과 영수증을 파일로 보관해 주세요.';
 }
 async function snoozeBackupReminder(){
  const next={...backupReminder,snoozedUntil:Date.now()+86400000};
  try{await writeStore('settings',[next]);backupReminder=next;renderBackupReminder();}catch(e){showError(e);}
+}
+
+async function migrateBackupSize(){
+ if(backupReminder.lastBackupAt&&!Number.isFinite(backupReminder.lastBackupBytes)){
+  const next={...backupReminder,lastBackupBytes:backupBytes};
+  await writeStore('settings',[next]);backupReminder=next;renderBackupReminder();
+ }
 }
 
 function render(){
@@ -324,7 +333,8 @@ async function backup(){try{
  const revision=backupReminder.revision;
  const data={format:'sa-expense-web',version:1,exportedAt:new Date().toISOString(),settings,expenses:all};
  download(new Blob([JSON.stringify(data)],{type:'application/json'}),'SA_경비백업_'+today()+'.json');
- const next={...backupReminder,lastBackupAt:Date.now(),backupRevision:revision,snoozedUntil:0};
+ const snapshotBytes=new Blob([JSON.stringify({settings:data.settings,expenses:data.expenses})]).size;
+ const next={...backupReminder,lastBackupAt:Date.now(),lastBackupBytes:snapshotBytes,backupRevision:revision,snoozedUntil:0};
  await writeStore('settings',[next]);backupReminder=next;renderBackupReminder();
  toast('전체 내역과 영수증 백업 다운로드를 요청했습니다. 파일이 저장되었는지 확인해 주세요.');
 }catch(e){showError(e);}}
@@ -468,7 +478,7 @@ $('guideBtn').onclick=()=>$('guideDialog').showModal();document.querySelectorAll
 $('proofPreview').onclick=()=>{if(!pendingImage)return;const w=window.open('','_blank');if(w){const im=w.document.createElement('img');im.src=pendingImage;im.style.maxWidth='100%';w.document.body.append(im);w.document.title='영수증 원본';}};
 try{await openDB();const saved=await readStore('settings');const profile=saved.find(x=>x.id==='profile');if(profile)settings={name:profile.name||'',title:profile.title||''};
  const reminder=saved.find(x=>x.id==='backupReminder');if(reminder)backupReminder={...backupReminder,...reminder};
- await reload();
+ await reload();await migrateBackupSize();
  if(!reminder){const dates=all.map(x=>Date.parse(x.createdAt)).filter(n=>Number.isFinite(n)&&n>0&&n<=Date.now());if(dates.length)backupReminder.startedAt=dates.reduce((a,b)=>Math.min(a,b),Date.now());await writeStore('settings',[backupReminder]);renderBackupReminder();}}catch(e){toast('브라우저 저장소를 열지 못했습니다. 일반 브라우저 창에서 다시 접속해 주세요.');showError(e);}
 
 setInterval(renderBackupReminder,60000);
