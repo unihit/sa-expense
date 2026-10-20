@@ -245,6 +245,17 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
 
 /* Reserve scrollbar space so adding receipts does not shift the page. */
 html{scrollbar-gutter:stable}
+.storage-badges{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;min-width:0}
+.folder-badge{max-width:100%;font-size:12px;line-height:1.4;border:1px solid var(--line);border-radius:6px;padding:6px 9px;color:#52657f;background:#f3f7fc;overflow-wrap:anywhere}
+.folder-badge[data-state="error"],#folderStatus[data-state="error"]{color:#ad492d;border-color:#edcfbc}
+.folder-backup-controls{margin:18px 26px;padding:14px;border:1px solid var(--line);border-radius:8px;background:#f7faff}
+.folder-backup-controls .backup-option{width:100%;margin:0 0 14px;padding:12px 10px;background:white}
+.folder-status-line{font-size:13px;line-height:1.6;color:var(--ink)}
+.folder-detail,.folder-help{font-size:12px;line-height:1.8;color:#62758b;margin:8px 0 0;overflow-wrap:anywhere}
+.folder-actions{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:9px}
+.folder-actions .text-button{font-size:12px}
+.folder-help{border-top:1px solid var(--line);padding-top:10px}
+@media(max-width:600px){.topbar{height:auto;min-height:48px;gap:8px;padding-top:8px;padding-bottom:8px}.storage-badges{gap:4px}.folder-badge{font-size:11px;padding:4px 6px}.folder-backup-controls{padding:12px}}
 @supports not (scrollbar-gutter:stable){html{overflow-y:scroll}}
 
 

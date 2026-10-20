@@ -1,3 +1,4 @@
+import {createFolderBackup} from './folder-backup.mjs?v=20261021-folder-backup';
 const $ = id => document.getElementById(id);
 const icons = {
  grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
@@ -43,7 +44,7 @@ async function readStore(name){return request(db.transaction(name).objectStore(n
 async function writeStore(name,items,removeId=null){
  const changed=name==='expenses'||(name==='settings'&&items.some(x=>x.id==='profile'));
  const next=changed?{...backupReminder,revision:Date.now().toString(36)+'-'+Math.random().toString(36).slice(2)}:null;
- return new Promise((resolve,reject)=>{const tx=db.transaction(changed?['expenses','settings']:name,'readwrite');const store=tx.objectStore(name);if(removeId)store.delete(removeId);for(const item of items)store.put(item);if(next)tx.objectStore('settings').put(next);tx.oncomplete=()=>{if(next)backupReminder=next;resolve();};tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||new Error('저장 공간이 부족하거나 저장을 완료하지 못했습니다. 백업 후 확인해 주세요.'));});
+ return new Promise((resolve,reject)=>{const tx=db.transaction(changed?['expenses','settings']:name,'readwrite');const store=tx.objectStore(name);if(removeId)store.delete(removeId);for(const item of items)store.put(item);if(next)tx.objectStore('settings').put(next);tx.oncomplete=()=>{if(next)backupReminder=next;resolve();if(next&&typeof notifyFolderChange==='function')notifyFolderChange();};tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||new Error('저장 공간이 부족하거나 저장을 완료하지 못했습니다. 백업 후 확인해 주세요.'));});
 }
 async function reload(){all=(await readStore('expenses')).map(normalizeTransitMethod);backupBytes=new Blob([JSON.stringify({settings,expenses:all})]).size;render();}
 function backupReminderStatus(count,bytes,state,now=Date.now()){
@@ -406,6 +407,68 @@ async function restore(file){
   if(incoming.length)$('monthInput').value=incoming.at(-1).day.slice(0,7);await reload();$('backupDialog').close();toast(`${incoming.length}건을 불러왔습니다. 기존 내역은 보존했습니다.`);
  }catch(e){showError(e);}finally{busy(false);$('restoreInput').value='';}
 }
+async function readBackupSnapshot(){
+ const tx=db.transaction(['expenses','settings']);
+ const [expenses,saved]=await Promise.all([request(tx.objectStore('expenses').getAll()),request(tx.objectStore('settings').getAll())]);
+ const profile=saved.find(x=>x.id==='profile')||{};
+ return {revision:saved.find(x=>x.id==='backupReminder')?.revision||backupReminder.revision,
+  data:{format:'sa-expense-web',version:1,exportedAt:new Date().toISOString(),
+   settings:{name:profile.name||'',title:profile.title||'',isTeamLead:profile.isTeamLead===true},expenses:expenses.map(normalizeTransitMethod)}};
+}
+function renderFolderBackup(state){
+ $('folderBackupControls').hidden=!state.supported;$('folderBadge').hidden=!state.supported;$('saveSubmission').hidden=!state.supported;
+ if(!state.supported)return;
+ let label='백업 폴더 연결 필요',detail='자동 백업할 전용 폴더를 선택해 주세요.';
+ if(state.connected){
+  if(state.writing)label=state.retrying?'폴더 저장 재시도 중':'폴더 저장 중';
+  else if(state.permission!=='granted'||state.error==='permission')label='백업 폴더 연결 필요';
+  else if(state.error||state.submissionPending)label='마지막 저장 실패(재시도)';
+  else if(state.pending)label='폴더 저장 대기 중';
+  else if(state.lastSyncedAt)label='폴더 백업 완료 · '+new Date(state.lastSyncedAt).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false});
+  detail=state.folderName+' · '+(state.submissionPending?state.pendingMonth+' 제출 파일 저장이 남아 있습니다. 재시도하면 해당 월의 파일 묶음을 다시 저장합니다.':state.error||state.permission!=='granted'?'브라우저에는 저장됐습니다. 폴더 연결·권한을 확인한 뒤 재시도하세요.':'내역은 브라우저에 먼저 저장하고 이 폴더로 자동 백업합니다.');
+ }
+ for(const id of ['folderStatus','folderBadge']){$(id).textContent=label;$(id).dataset.state=state.error||state.submissionPending?'error':state.pending?'pending':'ready';}
+ $('folderDetail').textContent=detail;$('connectFolderLabel').textContent=state.connected?'백업 폴더 변경':'백업 폴더 연결';
+ $('retryFolder').hidden=!state.connected;$('disconnectFolder').hidden=!state.connected;
+ for(const id of ['connectFolder','retryFolder','disconnectFolder'])$(id).disabled=state.writing;
+ $('submissionLabel').textContent=state.connected?'월별 제출 묶음 저장':'월별 제출 묶음 다운로드';
+ $('submissionHelp').textContent=state.connected?'연결 폴더에 엑셀·영수증 ZIP·전체 백업 저장':'엑셀·영수증 ZIP·전체 백업을 하나의 ZIP으로';
+}
+const folderBackup=createFolderBackup({
+ readSetting:async()=>(await readStore('settings')).find(x=>x.id==='folderBackup'),
+ writeSetting:record=>writeStore('settings',[record]),getSnapshot:readBackupSnapshot,makeSubmission:createSubmissionFiles,
+ getRevision:async()=>(await readStore('settings')).find(x=>x.id==='backupReminder')?.revision||backupReminder.revision,
+ onStatus:renderFolderBackup
+});
+function notifyFolderChange(){try{folderBackup.changed();}catch(e){console.error('폴더 백업 예약 실패',e);}}
+async function createSubmissionFiles(month){
+ const {data}=await readBackupSnapshot();
+ const list=data.expenses.filter(x=>x.day.slice(0,7)===month).sort((a,b)=>a.day.localeCompare(b.day)||a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id));
+ if(!list.length)throw new Error('저장된 경비를 먼저 추가해 주세요.');
+ const excel=await createExcel(list,0,data.settings),pages=await jpegPages(list),receipts=new JSZip();
+ pages.forEach((blob,i)=>receipts.file(`${month}_영수증_${String(i+1).padStart(2,'0')}.jpeg`,blob));
+ return [{name:'개인경비.xlsx',blob:excel},{name:'영수증.zip',blob:await receipts.generateAsync({type:'blob',compression:'STORE'})},
+  {name:'data.json',blob:new Blob([JSON.stringify(data)],{type:'application/json'})}];
+}
+async function downloadSubmissionFiles(month,files){
+ const zip=new JSZip();for(const file of files)zip.file(`${month}/${file.name}`,file.blob);
+ download(await zip.generateAsync({type:'blob',compression:'STORE'}),`${month}_제출묶음.zip`);
+}
+async function saveSubmission(){
+ if(!settings.name&&!confirm('기본 정보의 성명이 비어 있습니다. 빈 상태로 출력할까요?'))return;
+ const month=$('monthInput').value;
+ try{
+  // Ask for permission in the button gesture, before creating potentially large files.
+  const connected=folderBackup.connected,canWrite=connected&&await folderBackup.authorize();
+  busy(true,'월별 제출 파일과 전체 백업을 만들고 있습니다');
+  const files=await createSubmissionFiles(month);
+  if(canWrite){
+   try{await folderBackup.saveSubmission(month,files);toast('연결한 폴더의 '+month+'에 제출 파일과 전체 백업을 저장했습니다.');return;}
+   catch{await downloadSubmissionFiles(month,files);toast('폴더 저장에 실패해 제출 묶음 다운로드를 요청했습니다. 백업·복원에서 재시도할 수 있습니다.');return;}
+  }
+  await downloadSubmissionFiles(month,files);toast(connected?'폴더 권한이 없어 제출 묶음 다운로드를 요청했습니다.':'제출 묶음 다운로드를 요청했습니다.');
+ }catch(e){showError(e);}finally{busy(false);}
+}
 function xmlParse(s){const doc=new DOMParser().parseFromString(s,'application/xml');if(doc.querySelector('parsererror'))throw new Error('엑셀 양식을 읽지 못했습니다.');return doc;}
 function cell(sheet,ref){let c=[...sheet.getElementsByTagNameNS(NS,'c')].find(x=>x.getAttribute('r')===ref);if(c)return c;const rowNo=Number(ref.match(/\d+/)[0]);let row=[...sheet.getElementsByTagNameNS(NS,'row')].find(x=>Number(x.getAttribute('r'))===rowNo);if(!row){row=sheet.createElementNS(NS,'row');row.setAttribute('r',rowNo);const data=sheet.getElementsByTagNameNS(NS,'sheetData')[0];const next=[...data.children].find(x=>Number(x.getAttribute('r'))>rowNo);data.insertBefore(row,next||null);}c=sheet.createElementNS(NS,'c');c.setAttribute('r',ref);const ordinal=r=>[...r.match(/^[A-Z]+/)[0]].reduce((n,c)=>n*26+c.charCodeAt(0)-64,0);const next=[...row.children].find(x=>ordinal(x.getAttribute('r'))>ordinal(ref));row.insertBefore(c,next||null);return c;}
 function setCell(sheet,ref,value,type='text',formula=''){const c=cell(sheet,ref);c.replaceChildren();c.removeAttribute('t');if(formula){const f=sheet.createElementNS(NS,'f');f.textContent=formula;c.append(f);if(type==='text')c.setAttribute('t','str');}if(value===null)return;if(type==='text'&&!formula){c.setAttribute('t','inlineStr');const is=sheet.createElementNS(NS,'is'),t=sheet.createElementNS(NS,'t');t.setAttributeNS('http://www.w3.org/XML/1998/namespace','xml:space','preserve');t.textContent=String(value);is.append(t);c.append(is);}else{const v=sheet.createElementNS(NS,'v');v.textContent=String(value);c.append(v);}}
@@ -455,10 +518,10 @@ async function finalizeExcelPackage(zip){
  zip.file('[Content_Types].xml',new XMLSerializer().serializeToString(types));
 }
 let templateBytes=null;
-async function createExcel(list,offset){
+async function createExcel(list,offset,profile=settings){
  if(!templateBytes){const response=await fetch('./template.xlsx');if(!response.ok)throw new Error('회사 양식을 불러오지 못했습니다. 새로고침 후 다시 시도해 주세요.');templateBytes=await response.arrayBuffer();}
  const zip=await JSZip.loadAsync(templateBytes),sheet=xmlParse(await zip.file('xl/worksheets/sheet1.xml').async('string')),layout=prepareExcelRows(sheet,list.length);
- const month=Number(list[0].day.slice(5,7));setCell(sheet,'A4',`■ ( ${month} ) 월 개인경비 신청내역`);setCell(sheet,'B8',settings.title);setCell(sheet,'C8',settings.name);
+ const month=Number(list[0].day.slice(5,7));setCell(sheet,'A4',`■ ( ${month} ) 월 개인경비 신청내역`);setCell(sheet,'B8',profile.title);setCell(sheet,'C8',profile.name);
  for(let r=14;r<=13+layout.capacity;r++){for(const col of ['B','C','E','F','G'])setCell(sheet,col+r,null);setCell(sheet,'D'+r,'','text',weekdayFormula(r));}
  for(let r=55+layout.extra;r<=86+layout.extra;r++){if(r===60+layout.extra)continue;for(const col of ['B','C','E','F','G','H'])setCell(sheet,col+r,null);setCell(sheet,'D'+r,'','text',weekdayFormula(r));if(r<60+layout.extra){setCell(sheet,'F'+r,'주유비');setCell(sheet,'H'+r,0,'number',`G${r}*200`);}}
  const styles=xmlParse(await zip.file('xl/styles.xml').async('string'));let formats=styles.getElementsByTagNameNS(NS,'numFmts')[0];if(!formats){formats=styles.createElementNS(NS,'numFmts');styles.documentElement.insertBefore(formats,styles.documentElement.firstChild);}const formatId=Math.max(163,...[...formats.children].map(n=>Number(n.getAttribute('numFmtId'))))+1;const format=styles.createElementNS(NS,'numFmt');format.setAttribute('numFmtId',formatId);format.setAttribute('formatCode','yyyy-mm-dd');formats.append(format);formats.setAttribute('count',formats.children.length);const xfs=styles.getElementsByTagNameNS(NS,'cellXfs')[0],dateStyle=xfs.children[Number(cell(sheet,'C14').getAttribute('s')||0)].cloneNode(true),dateStyleId=xfs.children.length;dateStyle.setAttribute('numFmtId',formatId);dateStyle.setAttribute('applyNumberFormat','1');xfs.append(dateStyle);xfs.setAttribute('count',xfs.children.length);zip.file('xl/styles.xml',new XMLSerializer().serializeToString(styles));
@@ -546,6 +609,11 @@ $('ocrBtn').onclick=recognize;$('parseText').onclick=()=>applyOCR($('ocrText').v
 document.addEventListener('click',e=>{const b=e.target.closest('[data-edit]');if(b)openEditor(all.find(x=>x.id===b.dataset.edit));});document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('.receipt-card')){e.preventDefault();e.target.click();}});
 document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{view=b.dataset.view;render();});document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{filter=b.dataset.filter;document.querySelectorAll('[data-filter]').forEach(x=>x.classList.toggle('selected',x===b));render();});$('searchInput').oninput=render;
 for(const id of ['navBackup','backupInfo'])$(id).onclick=()=>$('backupDialog').showModal();$('backupQuick').onclick=backup;$('backupReminderNow').onclick=backup;$('backupReminderLater').onclick=snoozeBackupReminder;$('backupAll').onclick=backup;$('restoreBackup').onclick=()=>$('restoreInput').click();$('restoreInput').onchange=()=>restore($('restoreInput').files[0]);
+$('folderBadge').onclick=()=>$('backupDialog').showModal();
+$('connectFolder').onclick=async()=>{try{await folderBackup.connect();}catch(e){showError(e);}};
+$('retryFolder').onclick=async()=>{try{if(await folderBackup.retry())toast('연결한 폴더에 백업했습니다.');}catch(e){showError(e);}};
+$('disconnectFolder').onclick=async()=>{try{await folderBackup.disconnect();toast('폴더 연결을 해제했습니다. 저장된 파일은 그대로 남습니다.');}catch(e){showError(e);}};
+$('saveSubmission').onclick=saveSubmission;
 function renderSettingLimit(){$('settingLimit').textContent='월 '+won($('settingTeamLead').checked?300000:200000)+'원';}
 $('settingTeamLead').onchange=renderSettingLimit;
 $('navSettings').onclick=()=>{$('settingName').value=settings.name;$('settingTitle').value=settings.title;$('settingTeamLead').checked=settings.isTeamLead===true;renderSettingLimit();$('settingsDialog').showModal();};$('settingsForm').onsubmit=async e=>{e.preventDefault();try{settings={name:$('settingName').value.trim(),title:$('settingTitle').value.trim(),isTeamLead:$('settingTeamLead').checked};await writeStore('settings',[{id:'profile',...settings}]);$('settingsDialog').close();render();toast('기본 정보를 저장했습니다.');}catch(e){showError(e);}};
@@ -557,6 +625,7 @@ try{await openDB();const saved=await readStore('settings');const profile=saved.f
  await reload();await migrateBackupSize();
  if(!reminder){const dates=all.map(x=>Date.parse(x.createdAt)).filter(n=>Number.isFinite(n)&&n>0&&n<=Date.now());if(dates.length)backupReminder.startedAt=dates.reduce((a,b)=>Math.min(a,b),Date.now());await writeStore('settings',[backupReminder]);renderBackupReminder();}}catch(e){toast('브라우저 저장소를 열지 못했습니다. 일반 브라우저 창에서 다시 접속해 주세요.');showError(e);}
 
+await folderBackup.initialize();
 setInterval(renderBackupReminder,60000);
 document.addEventListener('paste',handleReceiptPaste);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)renderBackupReminder();});
