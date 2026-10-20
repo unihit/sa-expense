@@ -152,3 +152,14 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
 .download-area .download-ready:hover{background:#e3eedb;border-color:#a7bd98}
 .download-area .download-ready:focus-visible{outline:3px solid #406b4980;outline-offset:3px}
 @media(max-width:1200px){.context-column.has-download{display:block;min-width:0}.context-column.has-download .workflow{display:none}.context-column.has-download .storage-note{margin-top:0;padding-top:18px}}
+
+/* Backup reminders remain visible across desktop and mobile layouts. */
+.backup-reminder{display:flex;align-items:center;gap:14px;padding:18px 20px;margin-bottom:24px;border:1px solid #e1c68d;border-radius:10px;background:#fff8e9;color:#685025}
+.backup-reminder>[data-icon]{align-self:flex-start;margin-top:3px}
+.backup-reminder-copy{flex:1;min-width:0}
+.backup-reminder-copy strong{font-size:15px}
+.backup-reminder-copy p{margin:5px 0 0;font-size:13px;line-height:1.7}
+.backup-reminder-actions{display:flex;gap:8px;flex-wrap:wrap}
+.backup-reminder-actions .button{font-size:13px}
+@media(max-width:1100px){.backup-reminder{flex-wrap:wrap}.backup-reminder-actions{flex:1 0 100%;justify-content:flex-end}}
+@media(max-width:600px){.backup-reminder{padding:16px;gap:10px}.backup-reminder-actions .button{flex:1;padding:10px}}

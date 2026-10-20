@@ -26,6 +26,7 @@ function hydrateIcons(root=document) { root.querySelectorAll('[data-icon]').forE
 hydrateIcons();
 const NS='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 let db, all=[], settings={name:'',title:''}, view='ledger', filter='all', queue=[], editing=null, pendingImage='', pendingDigest='', worker=null, ocrBusy=false;
+let backupReminder={id:'backupReminder',revision:'initial',startedAt:Date.now(),lastBackupAt:0,backupRevision:null,snoozedUntil:0},backupBytes=0;
 let toastTimer,monthPickerYear=new Date().getFullYear();
 function toast(message) { $('toast').textContent=message; $('toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('show'),6000); }
 function showError(error) {console.error(error);toast(error.message||String(error));}
@@ -38,9 +39,34 @@ function rows(){return all.filter(x=>x.day.slice(0,7)===$('monthInput').value).s
 function request(req){return new Promise((resolve,reject)=>{req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
 async function openDB(){db=await new Promise((resolve,reject)=>{const req=indexedDB.open('sa-expense-web',1);req.onupgradeneeded=()=>{req.result.createObjectStore('expenses',{keyPath:'id'});req.result.createObjectStore('settings',{keyPath:'id'});};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
 async function readStore(name){return request(db.transaction(name).objectStore(name).getAll());}
-async function writeStore(name,items,removeId=null){return new Promise((resolve,reject)=>{const tx=db.transaction(name,'readwrite');const store=tx.objectStore(name);if(removeId)store.delete(removeId);for(const item of items)store.put(item);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||new Error('저장 공간이 부족하거나 저장을 완료하지 못했습니다. 백업 후 확인해 주세요.'));});}
-async function reload(){all=(await readStore('expenses')).map(normalizeTransitMethod);render();}
+async function writeStore(name,items,removeId=null){
+ const changed=name==='expenses'||(name==='settings'&&items.some(x=>x.id==='profile'));
+ const next=changed?{...backupReminder,revision:Date.now().toString(36)+'-'+Math.random().toString(36).slice(2)}:null;
+ return new Promise((resolve,reject)=>{const tx=db.transaction(changed?['expenses','settings']:name,'readwrite');const store=tx.objectStore(name);if(removeId)store.delete(removeId);for(const item of items)store.put(item);if(next)tx.objectStore('settings').put(next);tx.oncomplete=()=>{if(next)backupReminder=next;resolve();};tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||new Error('저장 공간이 부족하거나 저장을 완료하지 못했습니다. 백업 후 확인해 주세요.'));});
+}
+async function reload(){all=(await readStore('expenses')).map(normalizeTransitMethod);backupBytes=new Blob([JSON.stringify({settings,expenses:all})]).size;render();}
+function backupReminderStatus(count,bytes,state,now=Date.now()){
+ if(!count||state.backupRevision===state.revision||now<state.snoozedUntil)return null;
+ const baseline=state.lastBackupAt||state.startedAt;
+ const days=Math.max(0,Math.floor((now-baseline)/86400000));
+ const overdue=days>=30,large=bytes>=100*1024*1024;
+ return overdue||large?{days,overdue,large,megabytes:Math.ceil(bytes/1024/1024)}:null;
+}
+function renderBackupReminder(){
+ const host=$('backupReminder');if(!host)return;
+ const status=backupReminderStatus(all.length,backupBytes,backupReminder);host.hidden=!status;if(!status)return;
+ const reasons=[];
+ if(status.overdue)reasons.push(backupReminder.lastBackupAt?'마지막 백업 후 '+status.days+'일이 지났습니다.':'백업 없이 자료를 보관한 지 '+status.days+'일이 지났습니다.');
+ if(status.large)reasons.push('저장된 경비·영수증 데이터가 약 '+status.megabytes+'MB입니다.');
+ $('backupReminderText').textContent=reasons.join(' ')+' 아직 백업하지 않은 변경 내용이 있습니다. 모든 월의 내역과 영수증을 파일로 보관해 주세요.';
+}
+async function snoozeBackupReminder(){
+ const next={...backupReminder,snoozedUntil:Date.now()+86400000};
+ try{await writeStore('settings',[next]);backupReminder=next;renderBackupReminder();}catch(e){showError(e);}
+}
+
 function render(){
+ renderBackupReminder();
  const list=rows(), total=list.reduce((s,x)=>s+x.amount,0),missing=list.filter(x=>!x.image).length;
  $('totalAmount').textContent=won(total);$('totalCount').textContent=list.length;$('missingCount').textContent=missing;$('listCount').textContent=list.length;$('navCount').textContent=list.length;
  const [year,month]=$('monthInput').value.split('-');$('monthLabel').textContent=`${year}년 ${Number(month)}월`;$('pageTitle').textContent=`${Number(month)}월 개인경비`;$('periodCaption').textContent=`${year}.${month}.01 — ${year}.${month}.${new Date(Number(year),Number(month),0).getDate()}`;
@@ -294,7 +320,15 @@ async function recognize(){
 }
 function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.textContent=name+' · 다시 다운로드';a.className='download-ready';const host=$('downloadArea');host.closest('.context-column').classList.add('has-download');const old=host.querySelector('.download-ready');if(old){URL.revokeObjectURL(old.href);old.remove();}host.append(a);a.click();}
 
-async function backup(){try{const data={format:'sa-expense-web',version:1,exportedAt:new Date().toISOString(),settings,expenses:all};download(new Blob([JSON.stringify(data)],{type:'application/json'}),`SA_경비백업_${today()}.json`);toast('전체 내역과 영수증 백업을 다운로드했습니다.');}catch(e){showError(e);}}
+async function backup(){try{
+ const revision=backupReminder.revision;
+ const data={format:'sa-expense-web',version:1,exportedAt:new Date().toISOString(),settings,expenses:all};
+ download(new Blob([JSON.stringify(data)],{type:'application/json'}),'SA_경비백업_'+today()+'.json');
+ const next={...backupReminder,lastBackupAt:Date.now(),backupRevision:revision,snoozedUntil:0};
+ await writeStore('settings',[next]);backupReminder=next;renderBackupReminder();
+ toast('전체 내역과 영수증 백업 다운로드를 요청했습니다. 파일이 저장되었는지 확인해 주세요.');
+}catch(e){showError(e);}}
+
 async function restore(file){
  if(!file)return;busy(true,'백업을 확인하고 있습니다');
  try{
@@ -427,9 +461,15 @@ $('deleteExpense').onclick=async()=>{if(!editing||!confirm('이 경비 내역을
 $('ocrBtn').onclick=recognize;$('parseText').onclick=()=>applyOCR($('ocrText').value);
 document.addEventListener('click',e=>{const b=e.target.closest('[data-edit]');if(b)openEditor(all.find(x=>x.id===b.dataset.edit));});document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('.receipt-card')){e.preventDefault();e.target.click();}});
 document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{view=b.dataset.view;render();});document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{filter=b.dataset.filter;document.querySelectorAll('[data-filter]').forEach(x=>x.classList.toggle('selected',x===b));render();});$('searchInput').oninput=render;
-for(const id of ['navBackup','backupInfo'])$(id).onclick=()=>$('backupDialog').showModal();$('backupQuick').onclick=backup;$('backupAll').onclick=backup;$('restoreBackup').onclick=()=>$('restoreInput').click();$('restoreInput').onchange=()=>restore($('restoreInput').files[0]);
+for(const id of ['navBackup','backupInfo'])$(id).onclick=()=>$('backupDialog').showModal();$('backupQuick').onclick=backup;$('backupReminderNow').onclick=backup;$('backupReminderLater').onclick=snoozeBackupReminder;$('backupAll').onclick=backup;$('restoreBackup').onclick=()=>$('restoreInput').click();$('restoreInput').onchange=()=>restore($('restoreInput').files[0]);
 $('navSettings').onclick=()=>{$('settingName').value=settings.name;$('settingTitle').value=settings.title;$('settingsDialog').showModal();};$('settingsForm').onsubmit=async e=>{e.preventDefault();try{settings={name:$('settingName').value.trim(),title:$('settingTitle').value.trim()};await writeStore('settings',[{id:'profile',...settings}]);$('settingsDialog').close();render();toast('기본 정보를 저장했습니다.');}catch(e){showError(e);}};
 $('exportBtn').onclick=()=>{const list=rows();if(!list.length){toast('저장된 경비를 먼저 추가해 주세요.');return;}$('exportSummary').textContent=`${$('monthInput').value} · ${list.length}건 · ${won(list.reduce((s,r)=>s+r.amount,0))}원 · 입력한 내역과 합계만 표시합니다.`;$('exportDialog').showModal();};$('downloadExcel').onclick=downloadExcel;$('downloadJpeg').onclick=downloadJpeg;
 $('guideBtn').onclick=()=>$('guideDialog').showModal();document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$(b.dataset.close).close());
 $('proofPreview').onclick=()=>{if(!pendingImage)return;const w=window.open('','_blank');if(w){const im=w.document.createElement('img');im.src=pendingImage;im.style.maxWidth='100%';w.document.body.append(im);w.document.title='영수증 원본';}};
-try{await openDB();const saved=await readStore('settings');if(saved[0])settings={name:saved[0].name||'',title:saved[0].title||''};await reload();}catch(e){toast('브라우저 저장소를 열지 못했습니다. 일반 브라우저 창에서 다시 접속해 주세요.');showError(e);}
+try{await openDB();const saved=await readStore('settings');const profile=saved.find(x=>x.id==='profile');if(profile)settings={name:profile.name||'',title:profile.title||''};
+ const reminder=saved.find(x=>x.id==='backupReminder');if(reminder)backupReminder={...backupReminder,...reminder};
+ await reload();
+ if(!reminder){const dates=all.map(x=>Date.parse(x.createdAt)).filter(n=>Number.isFinite(n)&&n>0&&n<=Date.now());if(dates.length)backupReminder.startedAt=dates.reduce((a,b)=>Math.min(a,b),Date.now());await writeStore('settings',[backupReminder]);renderBackupReminder();}}catch(e){toast('브라우저 저장소를 열지 못했습니다. 일반 브라우저 창에서 다시 접속해 주세요.');showError(e);}
+
+setInterval(renderBackupReminder,60000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)renderBackupReminder();});

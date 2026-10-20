@@ -5,8 +5,8 @@
 <meta name="theme-color" content="#23332d"><meta name="description" content="영수증부터 개인경비 정산까지, 설치 없이 한 곳에서.">
 <title>SA 개인경비 · 영수증 정리</title>
 <link rel="preload" href="vendor/fonts/NotoSansKR-Regular.woff" as="font" type="font/woff" crossorigin>
-<link rel="stylesheet" href="app.css?v=20261020-download9">
-<script defer src="vendor/jszip.min.js"></script><script defer src="vendor/tesseract.min.js"></script><script type="module" src="app.js?v=20261020-download9"></script>
+<link rel="stylesheet" href="app.css?v=20261020-reminder10">
+<script defer src="vendor/jszip.min.js"></script><script defer src="vendor/tesseract.min.js"></script><script type="module" src="app.js?v=20261020-reminder10"></script>
 </head>
 <body>
 <aside class="sidebar">
@@ -21,6 +21,7 @@
  <section class="content">
   <div class="heading-row"><div><div class="eyebrow">EXPENSE OVERVIEW</div><h1 id="pageTitle">이번 달 개인경비</h1><p class="subtitle">영수증은 모으고, 정산은 간편하게.</p></div><div class="heading-actions"><button class="button secondary" id="addManual"><i data-icon="plus"></i>직접 입력</button><button class="button primary" id="addReceipt"><i data-icon="upload"></i>영수증 추가</button></div></div>
   <div class="monthbar"><div class="monthpicker"><button class="icon-button" id="prevMonth" aria-label="이전 달"><i data-icon="chevronLeft"></i></button><button type="button" id="monthTrigger" class="month-trigger" aria-haspopup="dialog" aria-controls="monthDialog" aria-label="대상 월 선택"><i data-icon="calendar"></i><span id="monthLabel"></span><i data-icon="chevronDown"></i></button><input type="hidden" id="monthInput"><button class="icon-button" id="nextMonth" aria-label="다음 달"><i data-icon="chevronRight"></i></button></div><span class="period-caption" id="periodCaption"></span><button class="text-button" id="backupQuick"><i data-icon="download"></i>백업 다운로드</button></div>
+  <section id="backupReminder" class="backup-reminder" role="status" aria-live="polite" hidden><i data-icon="archive" aria-hidden="true"></i><div class="backup-reminder-copy"><strong>자료를 안전하게 백업해 주세요</strong><p id="backupReminderText"></p></div><div class="backup-reminder-actions"><button type="button" class="button primary" id="backupReminderNow"><i data-icon="download"></i>지금 백업</button><button type="button" class="button secondary" id="backupReminderLater">내일 다시 알림</button></div></section>
   <div class="stats"><div class="stat primary-stat"><div class="stat-label">이번 달 신청 금액 <i data-icon="wallet"></i></div><div class="stat-number"><span id="totalAmount">0</span><small>원</small></div><div class="stat-foot" id="totalFoot">확인 후 저장한 내역 기준</div></div><div class="stat"><div class="stat-label">등록된 경비 <i data-icon="list"></i></div><div class="stat-number"><span id="totalCount">0</span><small>건</small></div><div class="stat-foot">날짜순으로 자동 정리됩니다</div></div><div class="stat"><div class="stat-label">증빙 확인 필요 <i data-icon="check"></i></div><div class="stat-number"><span id="missingCount">0</span><small>건</small></div><div class="stat-foot" id="missingFoot">등록된 경비가 없습니다</div></div></div>
   <div class="work-layout"><section class="ledger-panel"><div class="panel-header"><div><h2 id="listTitle">경비 내역 <span id="listCount">0</span></h2><p id="listSubtitle">저장한 내역과 영수증을 한눈에 확인하세요.</p></div><button class="button export-button" id="exportBtn"><i data-icon="download"></i>제출 파일 만들기</button></div>
    <div class="filterbar"><div class="tabs" aria-label="경비 필터"><button class="selected" data-filter="all">전체</button><button data-filter="택시">택시</button><button data-filter="대중교통">대중교통</button><button data-filter="기타">기타</button></div><label class="search"><i data-icon="search"></i><input id="searchInput" type="search" placeholder="목적 또는 이동구간 검색" aria-label="업무 목적 또는 이동구간 검색"></label></div>
