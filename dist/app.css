@@ -242,3 +242,7 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
 .brand>span{display:flex;flex-direction:column;justify-content:center;gap:4px;min-width:0;line-height:1.2}
 .brand small{margin:0;font-size:11px;line-height:1.35;white-space:nowrap}
 @media(max-width:800px){.brand>span{gap:3px}.brand small{font-size:11px}}
+
+/* Reserve scrollbar space so adding receipts does not shift the page. */
+html{scrollbar-gutter:stable}
+@supports not (scrollbar-gutter:stable){html{overflow-y:scroll}}
