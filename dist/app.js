@@ -53,12 +53,13 @@ function render(){
 }
 function setMonth(delta){const [y,m]=$('monthInput').value.split('-').map(Number);const d=new Date(y,m-1+delta,1);$('monthInput').value=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;render();}
 function selectedImage(){if(pendingImage){$('proofPreview').innerHTML=`<img src="${pendingImage}" alt="등록할 영수증">`;$('ocrBtn').disabled=false;}else{$('proofPreview').innerHTML='<i data-icon="image"></i><p>영수증 없이도 입력할 수 있어요.</p>';hydrateIcons($('proofPreview'));$('ocrBtn').disabled=true;}}
-function openEditor(row=null,image='',digest=''){
+function openEditor(row=null,image='',digest='',autoRead=false){
  editing=row;pendingImage=image||row?.image||'';pendingDigest=digest||row?.digest||'';
  $('expenseForm').reset();$('editorTitle').textContent=row?'경비 내역 수정':'경비 등록';$('expenseDate').value=row?.day||(image?'':today());$('expenseAmount').value=row?.amount?won(row.amount):'';
  for(const [field,key] of [['expenseMethod','method'],['expensePurpose','purpose'],['expenseOrigin','origin'],['expenseDestination','destination'],['ocrText','rawText']])$(field).value=row?.[key]||'';
- $('deleteExpense').hidden=!row;$('ocrState').textContent='영수증은 OCR 서버에 전송하지 않습니다.';$('queueStatus').textContent=queue.length?`대기 중인 영수증 ${queue.length}개`:'';
+ $('deleteExpense').hidden=!row;$('ocrState').textContent='영수증을 추가하면 자동으로 글자를 읽습니다. 이미지는 이 브라우저에서 처리합니다.';$('queueStatus').textContent=queue.length?`대기 중인 영수증 ${queue.length}개`:'';
  selectedImage();if(!$('editor').open)$('editor').showModal();
+ if(autoRead&&pendingImage)void recognize();
 }
 function closeEditor(){if(ocrBusy){toast('글자 읽기가 끝난 뒤 닫아 주세요.');return;}if(queue.length&&!confirm(`남은 영수증 ${queue.length}개의 등록을 취소할까요?`))return;queue=[];$('editor').close();editing=null;}
 async function digest(data){if(globalThis.crypto?.subtle){const hash=await crypto.subtle.digest('SHA-256',data);return Array.from(new Uint8Array(hash),v=>v.toString(16).padStart(2,'0')).join('');}let hash=2166136261;for(const byte of new Uint8Array(data)){hash^=byte;hash=Math.imul(hash,16777619);}return 'local-fnv-'+(hash>>>0).toString(16)+'-'+data.byteLength;}
@@ -80,11 +81,11 @@ async function filesToQueue(files,replace=false){
     const data=await readDataURL(file);await imageElement(data);prepared.push({image:data,digest:await digest(await file.arrayBuffer())});
    }
   }
-  if(replace){if(prepared.length!==1)throw new Error('증빙 교체는 이미지 한 장만 선택하세요.');pendingImage=prepared[0].image;pendingDigest=prepared[0].digest;selectedImage();return;}
+  if(replace){if(prepared.length!==1)throw new Error('증빙 교체는 이미지 한 장만 선택하세요.');pendingImage=prepared[0].image;pendingDigest=prepared[0].digest;for(const id of ['expenseDate','expenseAmount','expenseMethod','ocrText'])$(id).value='';selectedImage();void recognize();return;}
   queue.push(...prepared);nextQueued();
  }catch(e){showError(e);}finally{busy(false);$('fileInput').value='';}
 }
-function nextQueued(){const next=queue.shift();if(next)openEditor(null,next.image,next.digest);}
+function nextQueued(){const next=queue.shift();if(next)openEditor(null,next.image,next.digest,true);}
 function imageElement(src){return new Promise((resolve,reject)=>{const im=new Image();im.onload=()=>resolve(im);im.onerror=()=>reject(new Error('이미지를 열 수 없습니다. PNG 또는 JPG로 다시 저장해 주세요.'));im.src=src;});}
 function validateRecord(r){
  if(!validDate(r.day))throw new Error('실제 사용일을 올바르게 입력해 주세요.');
