@@ -11,16 +11,21 @@ const icons = {
  search:'<circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/>',
  lock:'<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2"/>',
  archive:'<path d="M4 8h16v13H4zM3 3h18v5H3zm6 9h6"/>',
- settings:'<path d="m9 3-1 3-3 1-2 3 2 3v3l3 2 1 3h6l1-3 3-2v-3l2-3-2-3-3-1-1-3z"/><circle cx="12" cy="12" r="3"/>',
+ settings:'<path d="M12.00 3.80 L14.01 1.90 L15.94 2.48 L16.56 5.18 L17.80 6.20 L20.56 6.28 L21.52 8.06 L20.04 10.40 L20.20 12.00 L22.10 14.01 L21.52 15.94 L18.82 16.56 L17.80 17.80 L17.72 20.56 L15.94 21.52 L13.60 20.04 L12.00 20.20 L9.99 22.10 L8.06 21.52 L7.44 18.82 L6.20 17.80 L3.44 17.72 L2.48 15.94 L3.96 13.60 L3.80 12.00 L1.90 9.99 L2.48 8.06 L5.18 7.44 L6.20 6.20 L6.28 3.44 L8.06 2.48 L10.40 3.96 Z"/><circle cx="12" cy="12" r="3.1"/>',
  info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v.1"/>',
+ calendar:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/>',
+ chevronLeft:'<path d="m15 5-7 7 7 7"/>',
+ chevronRight:'<path d="m9 5 7 7-7 7"/>',
+ chevronDown:'<path d="m6 9 6 6 6-6"/>',
+ close:'<path d="m6 6 12 12M18 6 6 18"/>',
  scan:'<path d="M3 8V3h5m8 0h5v5m0 8v5h-5M8 21H3v-5M7 8h10M7 12h10M7 16h6"/>',
  sheet:'<path d="M5 3h10l4 4v14H5zM15 3v5h4M8 12h8M8 16h8M12 12v7"/>'
 };
-function hydrateIcons(root=document) { root.querySelectorAll('[data-icon]').forEach(el => {el.innerHTML=`<svg viewBox="0 0 24 24" aria-hidden="true">${icons[el.dataset.icon]||icons.list}</svg>`;}); }
+function hydrateIcons(root=document) { root.querySelectorAll('[data-icon]').forEach(el => {el.innerHTML=`<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${icons[el.dataset.icon]||icons.list}</svg>`;}); }
 hydrateIcons();
 const NS='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 let db, all=[], settings={name:'',title:''}, view='ledger', filter='all', queue=[], editing=null, pendingImage='', pendingDigest='', worker=null, ocrBusy=false;
-let toastTimer;
+let toastTimer,monthPickerYear=new Date().getFullYear();
 function toast(message) { $('toast').textContent=message; $('toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('show'),6000); }
 function showError(error) {console.error(error);toast(error.message||String(error));}
 function busy(show,label='처리하고 있습니다') {$('busyLabel').textContent=label;$('busyOverlay').hidden=!show;}
@@ -37,7 +42,7 @@ async function reload(){all=(await readStore('expenses')).map(normalizeTransitMe
 function render(){
  const list=rows(), total=list.reduce((s,x)=>s+x.amount,0),missing=list.filter(x=>!x.image).length;
  $('totalAmount').textContent=won(total);$('totalCount').textContent=list.length;$('missingCount').textContent=missing;$('listCount').textContent=list.length;$('navCount').textContent=list.length;
- const [year,month]=$('monthInput').value.split('-');$('pageTitle').textContent=`${Number(month)}월 개인경비`;$('periodCaption').textContent=`${year}.${month}.01 — ${year}.${month}.${new Date(Number(year),Number(month),0).getDate()}`;
+ const [year,month]=$('monthInput').value.split('-');$('monthLabel').textContent=`${year}년 ${Number(month)}월`;$('pageTitle').textContent=`${Number(month)}월 개인경비`;$('periodCaption').textContent=`${year}.${month}.01 — ${year}.${month}.${new Date(Number(year),Number(month),0).getDate()}`;
  $('missingFoot').textContent=list.length?(missing?'영수증을 연결해 정산을 준비하세요':'모든 내역에 영수증이 있습니다'):'등록된 경비가 없습니다';
  $('profileName').textContent=settings.name||'나의 경비 공간';
  $('listTitle').firstChild.textContent=view==='receipts'?'영수증 모아보기 ':'경비 내역 ';
@@ -50,6 +55,19 @@ function render(){
  $('receiptGrid').innerHTML=shown.length?shown.map(r=>`<article class="receipt-card" tabindex="0" role="button" data-edit="${esc(r.id)}"><div class="receipt-thumb">${r.image?`<img src="${esc(r.image)}" alt="${r.no}번 ${esc(r.day)} 영수증">`:'<span>증빙 없음</span>'}</div><div class="receipt-info"><strong>${r.no}. ${esc(r.day)} · ${won(r.amount)}원</strong><span>${esc(r.purpose)}</span></div></article>`).join(''):'<p class="empty-message">조건에 맞는 영수증이 없습니다.</p>';
  $('resultCaption').textContent=list.length?`${shown.length}건 표시 · ${list.length}건 전체 합계 ${won(total)}원`:'영수증을 추가하거나 직접 입력해 시작하세요.';
  document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===view));
+}
+function renderMonthPicker(){
+ const [selectedYear,selectedMonth]=$('monthInput').value.split('-').map(Number);
+ $('monthYear').textContent=monthPickerYear+'년';
+ $('prevYear').disabled=monthPickerYear<=1900;$('nextYear').disabled=monthPickerYear>=2100;
+ $('monthGrid').innerHTML=Array.from({length:12},(_,i)=>{const month=i+1,selected=monthPickerYear===selectedYear&&month===selectedMonth;return `<button type="button" data-month="${month}" aria-pressed="${selected}" class="month-option${selected?' selected':''}">${month}월</button>`;}).join('');
+}
+function showMonthPicker(){monthPickerYear=Number($('monthInput').value.slice(0,4));renderMonthPicker();$('monthDialog').showModal();}
+function shiftPickerYear(delta){monthPickerYear=Math.max(1900,Math.min(2100,monthPickerYear+delta));renderMonthPicker();}
+function chooseMonth(month){
+ if(!Number.isInteger(month)||month<1||month>12)return;
+ $('monthInput').value=monthPickerYear+'-'+String(month).padStart(2,'0');
+ render();$('monthDialog').close();
 }
 function setMonth(delta){const [y,m]=$('monthInput').value.split('-').map(Number);const d=new Date(y,m-1+delta,1);$('monthInput').value=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;render();}
 function selectedImage(){if(pendingImage){$('proofPreview').innerHTML=`<img src="${pendingImage}" alt="등록할 영수증">`;$('ocrBtn').disabled=false;}else{$('proofPreview').innerHTML='<i data-icon="image"></i><p>영수증 없이도 입력할 수 있어요.</p>';hydrateIcons($('proofPreview'));$('ocrBtn').disabled=true;}}
@@ -396,6 +414,7 @@ async function downloadJpeg(){const list=rows();if(!list.length)return;busy(true
 
 // UI events
 $('monthInput').value=today().slice(0,7);$('monthInput').addEventListener('change',()=>{if($('monthInput').value)render();});$('prevMonth').onclick=()=>setMonth(-1);$('nextMonth').onclick=()=>setMonth(1);
+$('monthTrigger').onclick=showMonthPicker;$('prevYear').onclick=()=>shiftPickerYear(-1);$('nextYear').onclick=()=>shiftPickerYear(1);$('monthGrid').onclick=e=>{const b=e.target.closest('[data-month]');if(b)chooseMonth(Number(b.dataset.month));};
 $('addManual').onclick=()=>{queue=[];openEditor();};$('addReceipt').onclick=()=>{$('fileInput').dataset.replace='';$('fileInput').multiple=true;$('fileInput').accept='image/png,image/jpeg,image/webp,image/bmp,application/pdf';$('fileInput').click();};$('fileInput').onchange=()=>filesToQueue([...$('fileInput').files],$('fileInput').dataset.replace==='yes');
 $('replaceReceipt').onclick=()=>{$('fileInput').dataset.replace='yes';$('fileInput').multiple=false;$('fileInput').accept='image/png,image/jpeg,image/webp,image/bmp';$('fileInput').click();};
 $('dropZone').onclick=()=> $('addReceipt').click();$('dropZone').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();$('addReceipt').click();}};
