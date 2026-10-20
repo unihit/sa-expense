@@ -3,7 +3,7 @@
 
 .brand-icon{position:relative;letter-spacing:0;padding:0}.brand-icon>span{position:absolute;right:5px;bottom:7px;font-size:20px;line-height:.4}
 
-.download-ready{display:block;margin:18px 26px 0;padding:13px;border-radius:7px;background:#eef4e8;border:1px solid #d6e1cb;color:#537144;text-align:center;font-size:14px;overflow-wrap:anywhere}.panel-footer .download-ready{margin:0 12px;}
+.download-ready{display:block;margin:18px 26px 0;padding:13px;border-radius:7px;background:#eef4e8;border:1px solid #d6e1cb;color:#537144;text-align:center;font-size:14px;overflow-wrap:anywhere}
 
 /* Readable Korean typography across ledger and editor. */
 .brand small{font-size:12px}.nav-item{font-size:14px}.subtitle{font-size:14px}h1{letter-spacing:-.6px;font-weight:700}h2{letter-spacing:-.2px}.button{font-size:14px}table{font-size:14px}th{font-size:13px;font-weight:700}td{line-height:1.65}.purpose-cell{min-width:190px}.purpose-cell strong{font-weight:700}.purpose-cell small,.method-pill,.proof-dot{font-size:13px}.editor-fields label,.small-dialog label{font-size:14px;font-weight:700}input,select,textarea{font-size:15px;line-height:1.6}.ocr-state{font-size:13px;line-height:1.8;color:#536849}.receipt-info strong{font-size:14px}.stat-foot,.panel-header p{font-size:13px}.stat-number{font-weight:700;letter-spacing:-.5px}.search input{width:160px;font-size:13px}.dialog-description{font-size:14px}.ocr-details summary{font-size:13px}.panel-footer{font-size:12px}.workflow li p{font-size:13px}.review-note{font-size:13px}.brand{letter-spacing:.7px}@media(max-width:800px){.nav-item{font-size:13px}.button{font-size:13px}.heading-actions{flex-wrap:wrap}.stat{min-height:140px}.stat-foot{font-size:12px}.stat-number{font-size:23px}.search input{width:115px}.two-fields{gap:10px}.dialog-footer{flex-wrap:wrap}.page-footer{flex-wrap:wrap}.filterbar{flex-wrap:wrap}}
@@ -145,3 +145,10 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
 .expense-table tbody tr:hover{background:#fafcf8}
 .expense-table tbody tr:last-child td{border-bottom:0}
 .expense-table .empty-message{padding:32px 14px;text-align:center!important}
+
+/* Keep the latest download directly below the backup entry. */
+.download-area:empty{display:none}
+.download-area .download-ready{margin:8px 0 0;padding:12px 10px;width:100%;font-size:13px;line-height:1.65;white-space:normal;word-break:break-word}
+.download-area .download-ready:hover{background:#e3eedb;border-color:#a7bd98}
+.download-area .download-ready:focus-visible{outline:3px solid #406b4980;outline-offset:3px}
+@media(max-width:1200px){.context-column.has-download{display:block;min-width:0}.context-column.has-download .workflow{display:none}.context-column.has-download .storage-note{margin-top:0;padding-top:18px}}

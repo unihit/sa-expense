@@ -292,7 +292,7 @@ async function recognize(){
   $('ocrText').value=text;applyOCR(text,result);canvas.width=canvas.height=1;
  }catch(e){if(worker){await worker.terminate().catch(()=>{});worker=null;}$('ocrState').textContent='글자를 읽지 못했습니다. 직접 입력으로 계속할 수 있습니다.';showError(e);}finally{ocrBusy=false;$('ocrBtn').disabled=!pendingImage;$('saveExpense').disabled=false;$('replaceReceipt').disabled=false;}
 }
-function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.textContent=name+' · 다시 다운로드';a.className='download-ready';const host=document.querySelector('dialog[open]')||document.querySelector('.panel-footer');const old=host.querySelector('.download-ready');if(old){URL.revokeObjectURL(old.href);old.remove();}host.append(a);a.click();}
+function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.textContent=name+' · 다시 다운로드';a.className='download-ready';const host=$('downloadArea');host.closest('.context-column').classList.add('has-download');const old=host.querySelector('.download-ready');if(old){URL.revokeObjectURL(old.href);old.remove();}host.append(a);a.click();}
 
 async function backup(){try{const data={format:'sa-expense-web',version:1,exportedAt:new Date().toISOString(),settings,expenses:all};download(new Blob([JSON.stringify(data)],{type:'application/json'}),`SA_경비백업_${today()}.json`);toast('전체 내역과 영수증 백업을 다운로드했습니다.');}catch(e){showError(e);}}
 async function restore(file){
