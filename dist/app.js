@@ -124,7 +124,9 @@ function chooseMonth(month){
 }
 function setMonth(delta){const [y,m]=$('monthInput').value.split('-').map(Number);const d=new Date(y,m-1+delta,1);$('monthInput').value=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;render();}
 function selectedImage(){if(pendingImage){$('proofPreview').innerHTML=`<img src="${pendingImage}" alt="등록할 영수증">`;$('ocrBtn').disabled=false;}else{$('proofPreview').innerHTML='<i data-icon="image"></i><p>영수증 없이도 입력할 수 있어요.</p>';hydrateIcons($('proofPreview'));$('ocrBtn').disabled=true;}}
-function openEditor(row=null,image='',digest='',autoRead=false){
+let pendingOCRImage='';
+function openEditor(row=null,image='',digest='',autoRead=false,ocrImage=''){
+ pendingOCRImage=ocrImage;
  editing=row;pendingImage=image||row?.image||'';pendingDigest=digest||row?.digest||'';
  $('expenseForm').reset();$('editorTitle').textContent=row?'경비 내역 수정':'경비 등록';$('expenseDate').value=row?.day||(image?'':today());$('expenseAmount').value=row?.amount?won(row.amount):'';
  for(const [field,key] of [['expenseMethod','method'],['expensePurpose','purpose'],['expenseOrigin','origin'],['expenseDestination','destination'],['ocrText','rawText']])$(field).value=row?.[key]||'';
@@ -132,9 +134,37 @@ function openEditor(row=null,image='',digest='',autoRead=false){
  selectedImage();if(!$('editor').open)$('editor').showModal();
  if(autoRead&&pendingImage)void recognize();
 }
-function closeEditor(){if(ocrBusy){toast('글자 읽기가 끝난 뒤 닫아 주세요.');return;}if(queue.length&&!confirm(`남은 영수증 ${queue.length}개의 등록을 취소할까요?`))return;queue=[];$('editor').close();editing=null;}
+function closeEditor(){if(ocrBusy){toast('글자 읽기가 끝난 뒤 닫아 주세요.');return;}if(queue.length&&!confirm(`남은 영수증 ${queue.length}개의 등록을 취소할까요?`))return;queue=[];pendingOCRImage='';$('editor').close();editing=null;}
 async function digest(data){if(globalThis.crypto?.subtle){const hash=await crypto.subtle.digest('SHA-256',data);return Array.from(new Uint8Array(hash),v=>v.toString(16).padStart(2,'0')).join('');}let hash=2166136261;for(const byte of new Uint8Array(data)){hash^=byte;hash=Math.imul(hash,16777619);}return 'local-fnv-'+(hash>>>0).toString(16)+'-'+data.byteLength;}
 function readDataURL(blob){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(r.error);r.readAsDataURL(blob);});}
+async function optimizeReceiptImage(file,original){
+ let bitmap,canvas;
+ try{
+  // Decode EXIF orientation once; HTMLImageElement is the fallback on older browsers.
+  let image;
+  try{bitmap=await createImageBitmap(file,{imageOrientation:'from-image'});image=bitmap;}
+  catch{image=await imageElement(original);}
+  const width=image.naturalWidth||image.width,height=image.naturalHeight||image.height;
+  if(!width||!height)throw new Error('Invalid image dimensions');
+  const scale=Math.min(1,1600/Math.max(width,height));
+  const small=scale===1&&file.size<=512*1024;
+  if(small&&file.type==='image/jpeg')return original;
+  canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(width*scale));canvas.height=Math.max(1,Math.round(height*scale));
+  const ctx=canvas.getContext('2d',{willReadFrequently:small});
+  if(!ctx)throw new Error('Canvas unavailable');
+  ctx.drawImage(image,0,0,canvas.width,canvas.height);
+  if(small){
+   const pixels=ctx.getImageData(0,0,canvas.width,canvas.height).data;
+   let transparent=false;for(let i=3;i<pixels.length;i+=4)if(pixels[i]!==255){transparent=true;break;}
+   if(!transparent)return original;
+  }
+  ctx.fillStyle='white';ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(image,0,0,canvas.width,canvas.height);
+  const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b&&b.type==='image/jpeg'?resolve(b):reject(new Error('JPEG encoding failed')),'image/jpeg',.8));
+  return await readDataURL(blob);
+ }catch{return original;}
+ finally{bitmap?.close();if(canvas)canvas.width=canvas.height=1;}
+}
 async function filesToQueue(files,replace=false){
  if(!files.length)return;
  busy(true,'영수증을 준비하고 있습니다');
@@ -149,14 +179,16 @@ async function filesToQueue(files,replace=false){
     for(let i=1;i<=pdf.numPages;i++){const page=await pdf.getPage(i),v=page.getViewport({scale:1.7}),c=document.createElement('canvas');c.width=Math.ceil(v.width);c.height=Math.ceil(v.height);await page.render({canvasContext:c.getContext('2d'),viewport:v}).promise;const data=c.toDataURL('image/png');prepared.push({image:data,digest:await digest(new TextEncoder().encode(data))});}
     await pdf.destroy();
    }else{
-    const data=await readDataURL(file);await imageElement(data);prepared.push({image:data,digest:await digest(await file.arrayBuffer())});
+    const original=await readDataURL(file);await imageElement(original);
+    const image=await optimizeReceiptImage(file,original);
+    prepared.push({image,ocrImage:image===original?'':original,digest:await digest(await file.arrayBuffer())});
    }
   }
-  if(replace){if(prepared.length!==1)throw new Error('증빙 교체는 이미지 한 장만 선택하세요.');pendingImage=prepared[0].image;pendingDigest=prepared[0].digest;for(const id of ['expenseDate','expenseAmount','expenseMethod','ocrText'])$(id).value='';selectedImage();void recognize();return;}
+  if(replace){if(prepared.length!==1)throw new Error('증빙 교체는 이미지 한 장만 선택하세요.');pendingImage=prepared[0].image;pendingOCRImage=prepared[0].ocrImage||'';pendingDigest=prepared[0].digest;for(const id of ['expenseDate','expenseAmount','expenseMethod','ocrText'])$(id).value='';selectedImage();void recognize();return;}
   queue.push(...prepared);nextQueued();
  }catch(e){showError(e);}finally{busy(false);$('fileInput').value='';}
 }
-function nextQueued(){const next=queue.shift();if(next)openEditor(null,next.image,next.digest,true);}
+function nextQueued(){const next=queue.shift();if(next)openEditor(null,next.image,next.digest,true,next.ocrImage||'');}
 function imageElement(src){return new Promise((resolve,reject)=>{const im=new Image();im.onload=()=>resolve(im);im.onerror=()=>reject(new Error('이미지를 열 수 없습니다. PNG 또는 JPG로 다시 저장해 주세요.'));im.src=src;});}
 function validateRecord(r){
  if(!validDate(r.day))throw new Error('실제 사용일을 올바르게 입력해 주세요.');
@@ -171,7 +203,7 @@ async function saveExpense(e){
   const record={id:editing?.id||(globalThis.crypto?.randomUUID?.()||'expense-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2)),day:$('expenseDate').value,amount:Number(amount),purpose:$('expensePurpose').value.trim(),origin:$('expenseOrigin').value.trim(),destination:$('expenseDestination').value.trim(),method:$('expenseMethod').value,rawText:$('ocrText').value,image:pendingImage,digest:pendingDigest,createdAt:editing?.createdAt||new Date().toISOString()};
   validateRecord(record);
   if(record.digest&&all.some(x=>x.id!==record.id&&x.digest===record.digest)&&!confirm('같은 영수증 파일이 이미 저장되어 있습니다. 별도 거래를 같은 증빙으로 등록하는 경우에만 저장하세요. 계속할까요?'))return;
-  await writeStore('expenses',[record]);$('monthInput').value=record.day.slice(0,7);await reload();$('editor').close();toast('경비 내역을 저장했습니다.');editing=null;if(queue.length)nextQueued();
+  await writeStore('expenses',[record]);$('monthInput').value=record.day.slice(0,7);await reload();$('editor').close();toast('경비 내역을 저장했습니다.');editing=null;pendingOCRImage='';if(queue.length)nextQueued();
  }catch(e){showError(e);}
 }
 function receiptAmounts(line,plain=false,zero=false){
@@ -313,7 +345,7 @@ async function recognize(){
   $('ocrState').textContent='글자 읽기를 준비합니다. 첫 실행은 언어 자료를 받아 시간이 걸릴 수 있어요.';
   if(!worker)worker=await Tesseract.createWorker('kor+eng',1,{cacheMethod:'none',workerPath:new URL('./vendor/worker.min.js',location.href).href,corePath:new URL('./vendor/core/',location.href).href,langPath:new URL('./vendor/lang/',location.href).href,logger:m=>{const label=m.status==='recognizing text'?'영수증의 글자를 읽고 있습니다':'읽기 도구를 준비하고 있습니다';$('ocrState').textContent=`${label} · ${Math.round((m.progress||0)*100)}%`;}});
   await worker.setParameters({tessedit_pageseg_mode:'11',preserve_interword_spaces:'1',tessedit_char_whitelist:''});
-  const source=await imageElement(pendingImage),canvas=document.createElement('canvas');
+  const source=await imageElement(pendingOCRImage||pendingImage),canvas=document.createElement('canvas');
   const scale=Math.min(3,3200/source.naturalWidth,6000/source.naturalHeight);canvas.width=Math.max(1,Math.round(source.naturalWidth*scale));canvas.height=Math.max(1,Math.round(source.naturalHeight*scale));const context=canvas.getContext('2d',{willReadFrequently:true});context.fillStyle='white';context.fillRect(0,0,canvas.width,canvas.height);context.drawImage(source,0,0,canvas.width,canvas.height);
   // Preserve thin/light digits in the first pass rather than erasing them with a hard threshold.
   const pixels=context.getImageData(0,0,canvas.width,canvas.height);for(let i=0;i<pixels.data.length;i+=4){const v=Math.round(pixels.data[i]*.299+pixels.data[i+1]*.587+pixels.data[i+2]*.114);pixels.data[i]=pixels.data[i+1]=pixels.data[i+2]=v;}context.putImageData(pixels,0,0);
@@ -508,7 +540,7 @@ $('dropZone').onclick=()=> $('addReceipt').click();$('dropZone').onkeydown=e=>{i
 for(const evt of ['dragenter','dragover'])$('dropZone').addEventListener(evt,e=>{e.preventDefault();$('dropZone').classList.add('dragover');});for(const evt of ['dragleave','drop'])$('dropZone').addEventListener(evt,e=>{e.preventDefault();$('dropZone').classList.remove('dragover');if(evt==='drop')filesToQueue([...e.dataTransfer.files]);});
 $('expenseForm').onsubmit=saveExpense;$('closeEditor').onclick=closeEditor;$('cancelEditor').onclick=closeEditor;$('editor').addEventListener('cancel',e=>{e.preventDefault();closeEditor();});
 $('expenseAmount').onblur=()=>{const v=$('expenseAmount').value.replaceAll(',','');if(/^\d+$/.test(v))$('expenseAmount').value=won(v);};
-$('deleteExpense').onclick=async()=>{if(!editing||!confirm('이 경비 내역을 삭제할까요?'))return;try{await writeStore('expenses',[],editing.id);$('editor').close();await reload();toast('내역을 삭제했습니다.');}catch(e){showError(e);}};
+$('deleteExpense').onclick=async()=>{if(!editing||!confirm('이 경비 내역을 삭제할까요?'))return;try{await writeStore('expenses',[],editing.id);pendingOCRImage='';$('editor').close();await reload();toast('내역을 삭제했습니다.');}catch(e){showError(e);}};
 $('ocrBtn').onclick=recognize;$('parseText').onclick=()=>applyOCR($('ocrText').value);
 document.addEventListener('click',e=>{const b=e.target.closest('[data-edit]');if(b)openEditor(all.find(x=>x.id===b.dataset.edit));});document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('.receipt-card')){e.preventDefault();e.target.click();}});
 document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{view=b.dataset.view;render();});document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{filter=b.dataset.filter;document.querySelectorAll('[data-filter]').forEach(x=>x.classList.toggle('selected',x===b));render();});$('searchInput').oninput=render;
