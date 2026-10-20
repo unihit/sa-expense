@@ -6,6 +6,27 @@ const source=fs.readFileSync('dist/app.js','utf8');
 const code=source.slice(source.indexOf('function validDate('),source.indexOf('\nfunction esc('))+'\n'+source.slice(source.indexOf('function receiptAmounts('),source.indexOf('\nfunction applyOCR('))+'\n'+source.slice(source.indexOf('function excelDay('),source.indexOf('\nlet templateBytes'));
 const ctx=vm.createContext({$:()=>({value:'2026-10'}),Date,Set,won:n=>Number(n).toLocaleString('ko-KR')});
 vm.runInContext(code,ctx);
+
+test('공통 교통 헤더보다 역명으로 지하철 분류',()=>{
+ for(const text of ['버스-지하철\n승차 서울역\n하차 강남역','버스/지하철\n신도림\n홍대입구','승차 가역\n하차 나역','승차 강남역(2호선)'])assert.equal(ctx.parseOCR(text).method,'지하철',text);
+});
+test('정류장과 버스 노선은 역명이 포함되어도 버스 분류',()=>{
+ for(const text of ['버스-지하철\n승차 정류장: 한빛아파트','버스/지하철\n서울역버스환승센터','승차 강남역 정류소\n하차 푸른초등학교','승차 한빛아파트\n하차 푸른초등학교','간선 143\n승차 서울역'])assert.equal(ctx.parseOCR(text).method,'버스',text);
+});
+test('이용내역·지역은 역명으로 오인하지 않고 통합 헤더만 있으면 수동 확인',()=>{
+ for(const text of ['이용내역\n최근\n청구','이용 지역 서울\n결제금액 1650원','버스-지하철\n결제금액 1650원','버스/지하철'])assert.equal(ctx.parseOCR(text).method,'',text);
+ assert.equal(ctx.parseOCR('택시 영수증\n도착 강남역').method,'택시');
+});
+test('보조 OCR에서 찾은 역명·정류장으로 이용수단 보완',()=>{
+ assert.equal(ctx.combineOCR('버스-지하철','승차 신도림\n하차 홍대입구').method,'지하철');
+ assert.equal(ctx.parseOCR('버스-지하철\n[보조 인식]\n정류장 한빛아파트').method,'버스');
+});
+test('기존 통합 이용수단은 내용에 따라 분류하고 불명확하면 기타로 표시',()=>{
+ assert.equal(ctx.normalizeTransitMethod({method:'버스/지하철',rawText:'승차 가역\n하차 나역'}).method,'지하철');
+ assert.equal(ctx.normalizeTransitMethod({method:'버스/지하철',rawText:'정류장 한빛아파트'}).method,'버스');
+ assert.equal(ctx.normalizeTransitMethod({method:'버스/지하철',rawText:''}).method,'기타');
+ const record={method:'택시',amount:8000};assert.equal(ctx.normalizeTransitMethod(record),record);
+});
 test('날짜 유효성과 Excel 날짜값',()=>{assert.equal(ctx.validDate('2026-02-30'),false);assert.equal(ctx.validDate('2028-02-29'),true);assert.equal(ctx.excelDay('2026-10-20'),46315);});
 test('승차 하차 1회만 합산',()=>{const r=ctx.parseOCR('10/20 08:43 하차 가역 100원\n10/20 08:19 승차 나역 1,550원\n지하철');assert.equal(r.amount,1650);assert.equal(r.day,'2026-10-20');assert.equal(r.method,'지하철');assert.equal(ctx.parseOCR('승차 1550원\n하차 100원\n승차 1550원').amount,'');});
 test('승인 금액을 세금과 누적액보다 우선',()=>{assert.equal(ctx.parseOCR('2026.10.15\n승인 금액 5,800원\n부가세 527원\n총 금액 174,800원').amount,5800);});

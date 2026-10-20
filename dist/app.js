@@ -33,7 +33,7 @@ function request(req){return new Promise((resolve,reject)=>{req.onsuccess=()=>re
 async function openDB(){db=await new Promise((resolve,reject)=>{const req=indexedDB.open('sa-expense-web',1);req.onupgradeneeded=()=>{req.result.createObjectStore('expenses',{keyPath:'id'});req.result.createObjectStore('settings',{keyPath:'id'});};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
 async function readStore(name){return request(db.transaction(name).objectStore(name).getAll());}
 async function writeStore(name,items,removeId=null){return new Promise((resolve,reject)=>{const tx=db.transaction(name,'readwrite');const store=tx.objectStore(name);if(removeId)store.delete(removeId);for(const item of items)store.put(item);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||new Error('저장 공간이 부족하거나 저장을 완료하지 못했습니다. 백업 후 확인해 주세요.'));});}
-async function reload(){all=await readStore('expenses');render();}
+async function reload(){all=(await readStore('expenses')).map(normalizeTransitMethod);render();}
 function render(){
  const list=rows(), total=list.reduce((s,x)=>s+x.amount,0),missing=list.filter(x=>!x.image).length;
  $('totalAmount').textContent=won(total);$('totalCount').textContent=list.length;$('missingCount').textContent=missing;$('listCount').textContent=list.length;$('navCount').textContent=list.length;
@@ -55,7 +55,7 @@ function setMonth(delta){const [y,m]=$('monthInput').value.split('-').map(Number
 function selectedImage(){if(pendingImage){$('proofPreview').innerHTML=`<img src="${pendingImage}" alt="등록할 영수증">`;$('ocrBtn').disabled=false;}else{$('proofPreview').innerHTML='<i data-icon="image"></i><p>영수증 없이도 입력할 수 있어요.</p>';hydrateIcons($('proofPreview'));$('ocrBtn').disabled=true;}}
 function openEditor(row=null,image='',digest=''){
  editing=row;pendingImage=image||row?.image||'';pendingDigest=digest||row?.digest||'';
- $('expenseForm').reset();$('fareHelper').open=false;$('editorTitle').textContent=row?'경비 내역 수정':'경비 등록';$('expenseDate').value=row?.day||(image?'':today());$('expenseAmount').value=row?.amount?won(row.amount):'';
+ $('expenseForm').reset();$('editorTitle').textContent=row?'경비 내역 수정':'경비 등록';$('expenseDate').value=row?.day||(image?'':today());$('expenseAmount').value=row?.amount?won(row.amount):'';
  for(const [field,key] of [['expenseMethod','method'],['expensePurpose','purpose'],['expenseOrigin','origin'],['expenseDestination','destination'],['ocrText','rawText']])$(field).value=row?.[key]||'';
  $('deleteExpense').hidden=!row;$('ocrState').textContent='영수증은 OCR 서버에 전송하지 않습니다.';$('queueStatus').textContent=queue.length?`대기 중인 영수증 ${queue.length}개`:'';
  selectedImage();if(!$('editor').open)$('editor').showModal();
@@ -177,6 +177,30 @@ function extractReceiptAmount(text){
  const values=[...new Set(lines.filter(x=>!excluded.test(x)).flatMap(x=>receiptAmounts(x)))];
  return values.length===1?{amount:values[0],note:'원화 금액을 찾았습니다. 실제 결제금액인지 확인하세요.'}:{amount:'',note:values.length?'금액이 여러 개여서 결제금액을 확정하지 못했습니다. 직접 입력하세요.':'확실한 금액을 찾지 못했습니다. 직접 입력해 주세요.'};
 }
+function inferTransport(text){
+ text=String(text||'').normalize('NFKC');
+ // A taxi receipt may mention a station as its destination.
+ if(/택시|taxi/i.test(text))return '택시';
+ // Card history screens use this as a category heading, not an individual mode.
+ const details=text.replace(/버스\s*[-/·]?\s*지하[철절설]/g,'');
+ const busStop=/정류\s*[장소]|버스\s*환승\s*센터|버스\s*터미널|공영\s*차고지|중앙\s*차로/.test(details);
+ const busRoute=/(?:간선|지선|광역|마을|공항)\s*(?:버스\s*)?[가-힣]*\d{1,4}|(?:버스\s*(?:번호|노선)|노선\s*번호)\s*[:：]?\s*[가-힣]*\d{1,4}/.test(details);
+ if(busStop||busRoute)return '버스';
+ const stationTokens=details.match(/[가-힣A-Za-z0-9·.]+역(?=$|[\s()[\]{}>,:：·/])/g)||[];
+ if(stationTokens.some(name=>!/(?:내역|지역|영역|권역|구역|용역|면역)$/.test(name)))return '지하철';
+ // Common station names also appear without the 역 suffix in transit histories.
+ const stationNames='신도림|구로디지털단지|가산디지털단지|홍대입구|고속터미널|서울대입구|동대문역사문화공원|디지털미디어시티|사당|교대|역삼|선릉|합정|잠실|강남|신림|신촌|당산|왕십리|청량리|충무로|충정로|을지로입구|종로3가|종로5가|여의도|영등포구청|금천구청|신대방|대림|온수|오류동|개봉|독산|신길';
+ if(new RegExp('(?:^|[\\s()[\\]{}>,:：·/])(?:'+stationNames+')(?:$|[\\s()[\\]{}>,:：·/])','m').test(details))return '지하철';
+ if(/승\s*차|하\s*차|교통|이용내역/.test(text)&&/[가-힣0-9.·]+(?:아파트|초등학교|중학교|고등학교|주민센터|사거리|삼거리|주유소|고개)(?=$|[\s()[\]{}>,:：·/])/.test(details))return '버스';
+ if(/지하[철절설]|도시철도|전철|[1-9]\s*호선|수인분당선|경의중앙선|신분당선|공항철도/.test(details))return '지하철';
+ if(/버스/.test(details))return '버스';
+ return '';
+}
+function normalizeTransitMethod(row){
+ if(row.method!=='버스/지하철')return row;
+ const method=inferTransport([row.rawText,row.origin,row.destination].filter(Boolean).join('\n'))||'기타';
+ return {...row,method};
+}
 function parseOCR(text){
  if(text.includes('[보조 인식]')){
   const [first,...tail]=text.split('[보조 인식]'),rest=tail.join('[보조 인식]'),second=rest.split(/\[금액 칸/)[0];
@@ -187,18 +211,18 @@ function parseOCR(text){
  text=text.normalize('NFKC');const notes=[];let day='',method='';const full=text.match(/(20\d{2})[.\-/년\s]+(\d{1,2})[.\-/월\s]+(\d{1,2})/),short=text.match(/(?<!\d)(\d{1,2})[\/월](\d{1,2})(?!\d)/);
  if(full)day=`${full[1]}-${full[2].padStart(2,'0')}-${full[3].padStart(2,'0')}`;else if(short){day=`${$('monthInput').value.slice(0,4)}-${short[1].padStart(2,'0')}-${short[2].padStart(2,'0')}`;notes.push('연도는 선택한 월을 기준으로 입력했습니다.');}if(!validDate(day))day='';
  const result=extractReceiptAmount(text);
- if(/택시/.test(text))method='택시';else if(/버스.?지하[철절설]/.test(text))method='버스/지하철';else if(/지하철/.test(text))method='지하철';else if(/버스/.test(text))method='버스';
+ method=inferTransport(text);
+ if(!method)notes.push('이용수단을 확인해 선택해 주세요.');
  if(!day)notes.push('사용일을 직접 입력해 주세요.');notes.push(result.note);return {day,amount:result.amount,fares:result.fares,method,notes};
 }
 function combineOCR(first,second){
  const a=parseOCR(first),b=parseOCR(second);let result={...a,notes:[...a.notes]};
- if(!result.day)result.day=b.day;if(!result.method)result.method=b.method;
+ if(!result.day)result.day=b.day;result.method=inferTransport(first+'\n'+second)||result.method||b.method;
  if(a.amount===''&&b.amount!==''){result.amount=b.amount;result.fares=b.fares;result.notes=b.notes.concat('보조 인식에서 금액을 찾았습니다. 원본을 확인하세요.');}
  else if(a.amount!==''&&b.amount!==''&&a.amount!==b.amount){result.amount='';result.notes=[`두 번의 인식 금액이 다릅니다 (${won(a.amount)} / ${won(b.amount)}원). 원본을 확인해 직접 입력하세요.`];}
  return result;
 }
 function applyOCR(text,result=parseOCR(text)){
- $('boardingFare').value=result.fares?won(result.fares[0]):'';$('alightingFare').value=result.fares?won(result.fares[1]):'';$('fareHelper').open=result.amount===''&&/승\s*차|하\s*차|교통|지하[철절설]/.test(text);
 $('expenseDate').value=result.day;$('expenseAmount').value=result.amount===''?'':won(result.amount);$('expenseMethod').value=result.method;$('ocrState').textContent=result.notes.join(' ')||'인식 결과를 원본과 확인한 뒤 저장해 주세요.';}
 async function recognize(){
  if(!pendingImage||ocrBusy)return;ocrBusy=true;$('ocrBtn').disabled=true;$('saveExpense').disabled=true;$('replaceReceipt').disabled=true;
@@ -336,12 +360,6 @@ for(const evt of ['dragenter','dragover'])$('dropZone').addEventListener(evt,e=>
 $('expenseForm').onsubmit=saveExpense;$('closeEditor').onclick=closeEditor;$('cancelEditor').onclick=closeEditor;$('editor').addEventListener('cancel',e=>{e.preventDefault();closeEditor();});
 $('expenseAmount').onblur=()=>{const v=$('expenseAmount').value.replaceAll(',','');if(/^\d+$/.test(v))$('expenseAmount').value=won(v);};
 $('deleteExpense').onclick=async()=>{if(!editing||!confirm('이 경비 내역을 삭제할까요?'))return;try{await writeStore('expenses',[],editing.id);$('editor').close();await reload();toast('내역을 삭제했습니다.');}catch(e){showError(e);}};
-$('applyFareSum').onclick=()=>{
- const fields=['boardingFare','alightingFare'].map(id=>$(id).value.replaceAll(',','').trim());
- if(fields.some(x=>!/^\d+$/.test(x))){toast('승차·하차 금액을 모두 입력하세요. 추가요금이 없으면 0원을 입력하세요.');return;}
- const sum=fields.reduce((total,x)=>total+Number(x),0);if(!Number.isSafeInteger(sum)||sum<=0||sum>1e9){toast('금액을 확인해 주세요.');return;}
- $('expenseAmount').value=won(sum);$('ocrState').textContent=`승차 ${won(fields[0])}원 + 하차 ${won(fields[1])}원 = ${won(sum)}원을 적용했습니다.`;
-};
 $('ocrBtn').onclick=recognize;$('parseText').onclick=()=>applyOCR($('ocrText').value);
 document.addEventListener('click',e=>{const b=e.target.closest('[data-edit]');if(b)openEditor(all.find(x=>x.id===b.dataset.edit));});document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.matches('.receipt-card'))e.target.click();});
 document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{view=b.dataset.view;render();});document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{filter=b.dataset.filter;document.querySelectorAll('[data-filter]').forEach(x=>x.classList.toggle('selected',x===b));render();});$('searchInput').oninput=render;
