@@ -99,3 +99,23 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
 .nav-count{display:inline-flex;align-items:center;justify-content:center;min-width:23px;min-height:23px;padding:2px 5px}
 @media(max-width:800px){.nav-count{display:none}}
 @media(max-width:600px){.editor-fields>.two-fields:first-child{grid-template-columns:1fr}}
+
+/* Clear expense editing and search controls */
+.filterbar{flex-wrap:wrap;gap:12px}
+.tabs{flex-shrink:0}
+.search{box-sizing:border-box;flex:0 1 280px;min-width:220px;max-width:100%;height:42px;padding:0 12px;gap:9px;border:1px solid #b7c5b9;border-radius:8px;background:#f7faf6;color:#4e6654;cursor:text;transition:border-color .15s,box-shadow .15s}
+.search [data-icon],.search svg{width:18px;height:18px}
+.search input{box-sizing:border-box;flex:1;min-width:0;width:100%;height:40px;padding:0;border:0;border-radius:0;background:transparent;color:var(--ink);font-size:13px;line-height:normal;outline:none;box-shadow:none}
+.search input::placeholder{color:#5d6d60;opacity:1}
+.search:focus-within{border-color:#406b49;background:#fff;box-shadow:0 0 0 3px #406b4926}
+.edit-row,.receipt-info .receipt-edit{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;padding:6px 10px;border:1px solid #c2d0bf;border-radius:6px;background:#f1f6ee;color:#365a3b;font-size:12px;font-weight:700;line-height:1.4;white-space:nowrap}
+.edit-row svg,.receipt-edit svg{width:15px;height:15px}
+.edit-row:hover,.receipt-card:hover .receipt-edit{background:#e3eedf;border-color:#8ea687}
+.edit-row:focus-visible,.receipt-card:focus-visible{outline:3px solid #406b4980;outline-offset:3px}
+.receipt-info-footer{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.receipt-info .receipt-purpose{min-width:0;overflow-wrap:anywhere}
+.receipt-info .receipt-edit{flex-shrink:0}
+@media(max-width:800px){.search{flex:1 0 100%;width:100%;min-width:0}.search input{width:100%;font-size:14px}.filterbar{gap:12px;padding-bottom:16px}}
+
+.search input{margin:0}
+@media(max-width:480px){.receipt-grid{grid-template-columns:minmax(0,1fr)}}
