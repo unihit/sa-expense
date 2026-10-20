@@ -213,3 +213,26 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
 #editor .button.danger:hover{background:#bd573b}
 #editor #saveExpense{background:var(--green);color:#fff;box-shadow:0 3px 7px #273f3326}
 #editor #saveExpense:hover{background:#365543}
+
+/* Monthly allowance stays within the existing summary card. */
+.primary-stat .stat-number{margin:10px 0 8px}
+.allowance-meta{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:#536849;line-height:1.4}
+.allowance-progress{height:5px;margin:8px 0;background:#dce5d5;border-radius:8px;overflow:hidden}
+.allowance-progress>span{display:block;width:0;height:100%;background:#51734c;border-radius:inherit}
+.allowance-status{font-weight:700;color:#496642;line-height:1.4}
+.primary-stat.over-limit{background:#fff4ed;border-color:#edcfbc}
+.over-limit .allowance-progress{background:#f1dfd2}.over-limit .allowance-progress>span{background:var(--accent)}
+.over-limit .allowance-status{color:#ad492d}
+.team-lead-setting{margin:18px 26px;padding:16px;border:1px solid #dfe5d9;border-radius:8px;background:#f8faf5}
+.small-dialog .team-lead-toggle{display:flex;align-items:center;gap:10px;cursor:pointer;margin:0;position:relative}
+.team-lead-toggle>span:first-child{flex:1}.team-lead-toggle strong{font-size:14px;color:var(--ink)}
+.team-lead-toggle small{display:block;font-size:12px;font-weight:400;margin-top:4px}
+.team-lead-toggle input{position:absolute;right:0;top:50%;transform:translateY(-50%);width:44px;height:26px;margin:0;opacity:0;cursor:pointer}
+.switch-track{display:block;width:44px;height:26px;flex:none;background:#b8c2b2;border-radius:20px;padding:3px;pointer-events:none}
+.switch-track:after{content:'';display:block;width:20px;height:20px;border-radius:50%;background:white;box-shadow:0 1px 3px #24372f26;transition:transform .15s}
+.team-lead-toggle input:checked+.switch-track{background:var(--green)}
+.team-lead-toggle input:checked+.switch-track:after{transform:translateX(18px)}
+.team-lead-toggle input:focus-visible+.switch-track{outline:3px solid #406b4980;outline-offset:3px}
+.setting-allowance{display:flex;justify-content:space-between;gap:10px;font-size:13px;color:#536849;margin-top:16px;padding-top:12px;border-top:1px solid #e1e7db}
+.team-lead-setting p{font-size:11px;line-height:1.7;color:#657267;margin:7px 0 0}
+@media(max-width:600px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.stats .primary-stat{grid-column:1/-1;min-height:0;padding:16px}.primary-stat .stat-number{margin:6px 0;font-size:28px}.allowance-meta{font-size:12px}.allowance-progress{margin:7px 0}.team-lead-setting{padding:14px}}

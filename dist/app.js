@@ -26,7 +26,7 @@ const icons = {
 function hydrateIcons(root=document) { root.querySelectorAll('[data-icon]').forEach(el => {el.innerHTML=`<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${icons[el.dataset.icon]||icons.list}</svg>`;}); }
 hydrateIcons();
 const NS='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
-let db, all=[], settings={name:'',title:''}, view='ledger', filter='all', queue=[], editing=null, pendingImage='', pendingDigest='', worker=null, ocrBusy=false;
+let db, all=[], settings={name:'',title:'',isTeamLead:false}, view='ledger', filter='all', queue=[], editing=null, pendingImage='', pendingDigest='', worker=null, ocrBusy=false;
 let backupReminder={id:'backupReminder',revision:'initial',startedAt:Date.now(),lastBackupAt:0,lastBackupBytes:null,backupRevision:null,snoozedUntil:0},backupBytes=0;
 let toastTimer,monthPickerYear=new Date().getFullYear();
 function toast(message) { $('toast').textContent=message; $('toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('show'),6000); }
@@ -75,10 +75,25 @@ async function migrateBackupSize(){
  }
 }
 
+function allowanceStatus(total,isTeamLead){
+ const limit=isTeamLead===true?300000:200000;
+ return {limit,remaining:Math.max(0,limit-total),excess:Math.max(0,total-limit),percent:Math.min(100,Math.max(0,total/limit*100))};
+}
+function renderAllowance(total){
+ const state=allowanceStatus(total,settings.isTeamLead),over=state.excess>0;
+ $('allowanceCard').classList.toggle('over-limit',over);
+ $('allowanceLimit').textContent='월 한도 '+won(state.limit)+'원';
+ $('allowanceRole').textContent=settings.isTeamLead===true?'팀장 이상':'일반 직원';
+ $('totalFoot').textContent=over?won(state.excess)+'원 초과':state.remaining===0?'한도에 도달했습니다':won(state.remaining)+'원 남음';
+ $('allowanceFill').style.width=state.percent+'%';
+ $('allowanceProgress').setAttribute('aria-valuenow',String(Math.min(total,state.limit)));
+ $('allowanceProgress').setAttribute('aria-valuemax',String(state.limit));
+ $('allowanceProgress').setAttribute('aria-valuetext',won(total)+'원 / 한도 '+won(state.limit)+'원'+(over?' · '+won(state.excess)+'원 초과':''));
+}
 function render(){
  renderBackupReminder();
  const list=rows(), total=list.reduce((s,x)=>s+x.amount,0),missing=list.filter(x=>!x.image).length;
- $('totalAmount').textContent=won(total);$('totalCount').textContent=list.length;$('missingCount').textContent=missing;$('listCount').textContent=list.length;$('navCount').textContent=list.length;
+ $('totalAmount').textContent=won(total);renderAllowance(total);$('totalCount').textContent=list.length;$('missingCount').textContent=missing;$('listCount').textContent=list.length;$('navCount').textContent=list.length;
  const [year,month]=$('monthInput').value.split('-');$('monthLabel').textContent=`${year}년 ${Number(month)}월`;$('pageTitle').textContent=`${Number(month)}월 개인경비`;$('periodCaption').textContent=`${year}.${month}.01 — ${year}.${month}.${new Date(Number(year),Number(month),0).getDate()}`;
  $('missingFoot').textContent=list.length?(missing?'영수증을 연결해 정산을 준비하세요':'모든 내역에 영수증이 있습니다'):'등록된 경비가 없습니다';
  $('profileName').textContent=settings.name||'나의 경비 공간';
@@ -355,7 +370,7 @@ async function restore(file){
   for(const raw of data.expenses){const r={id:String(raw.id||''),day:String(raw.day||''),amount:Number(raw.amount),purpose:String(raw.purpose||''),origin:String(raw.origin||''),destination:String(raw.destination||''),method:String(raw.method||''),image:String(raw.image||''),digest:String(raw.digest||''),rawText:String(raw.rawText||''),createdAt:String(raw.createdAt||new Date().toISOString())};if(!r.id||r.id.length>200)throw new Error('백업 내역 ID가 올바르지 않습니다.');validateRecord(r);if(!ids.has(r.id)){incoming.push(r);ids.add(r.id);}}
   if(!confirm(`${incoming.length}건을 기존 내역에 추가합니다. 같은 ID는 건너뜁니다. 계속할까요?`))return;
   await writeStore('expenses',incoming);
-  if(data.settings){settings={name:String(data.settings.name||'').slice(0,40),title:String(data.settings.title||'').slice(0,40)};await writeStore('settings',[{id:'profile',...settings}]);}
+  if(data.settings){settings={name:String(data.settings.name||'').slice(0,40),title:String(data.settings.title||'').slice(0,40),isTeamLead:data.settings.isTeamLead===true};await writeStore('settings',[{id:'profile',...settings}]);}
   if(incoming.length)$('monthInput').value=incoming.at(-1).day.slice(0,7);await reload();$('backupDialog').close();toast(`${incoming.length}건을 불러왔습니다. 기존 내역은 보존했습니다.`);
  }catch(e){showError(e);}finally{busy(false);$('restoreInput').value='';}
 }
@@ -498,11 +513,13 @@ $('ocrBtn').onclick=recognize;$('parseText').onclick=()=>applyOCR($('ocrText').v
 document.addEventListener('click',e=>{const b=e.target.closest('[data-edit]');if(b)openEditor(all.find(x=>x.id===b.dataset.edit));});document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('.receipt-card')){e.preventDefault();e.target.click();}});
 document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{view=b.dataset.view;render();});document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{filter=b.dataset.filter;document.querySelectorAll('[data-filter]').forEach(x=>x.classList.toggle('selected',x===b));render();});$('searchInput').oninput=render;
 for(const id of ['navBackup','backupInfo'])$(id).onclick=()=>$('backupDialog').showModal();$('backupQuick').onclick=backup;$('backupReminderNow').onclick=backup;$('backupReminderLater').onclick=snoozeBackupReminder;$('backupAll').onclick=backup;$('restoreBackup').onclick=()=>$('restoreInput').click();$('restoreInput').onchange=()=>restore($('restoreInput').files[0]);
-$('navSettings').onclick=()=>{$('settingName').value=settings.name;$('settingTitle').value=settings.title;$('settingsDialog').showModal();};$('settingsForm').onsubmit=async e=>{e.preventDefault();try{settings={name:$('settingName').value.trim(),title:$('settingTitle').value.trim()};await writeStore('settings',[{id:'profile',...settings}]);$('settingsDialog').close();render();toast('기본 정보를 저장했습니다.');}catch(e){showError(e);}};
+function renderSettingLimit(){$('settingLimit').textContent='월 '+won($('settingTeamLead').checked?300000:200000)+'원';}
+$('settingTeamLead').onchange=renderSettingLimit;
+$('navSettings').onclick=()=>{$('settingName').value=settings.name;$('settingTitle').value=settings.title;$('settingTeamLead').checked=settings.isTeamLead===true;renderSettingLimit();$('settingsDialog').showModal();};$('settingsForm').onsubmit=async e=>{e.preventDefault();try{settings={name:$('settingName').value.trim(),title:$('settingTitle').value.trim(),isTeamLead:$('settingTeamLead').checked};await writeStore('settings',[{id:'profile',...settings}]);$('settingsDialog').close();render();toast('기본 정보를 저장했습니다.');}catch(e){showError(e);}};
 $('exportBtn').onclick=()=>{const list=rows();if(!list.length){toast('저장된 경비를 먼저 추가해 주세요.');return;}$('exportSummary').textContent=`${$('monthInput').value} · ${list.length}건 · ${won(list.reduce((s,r)=>s+r.amount,0))}원 · 입력한 내역과 합계만 표시합니다.`;$('exportDialog').showModal();};$('downloadExcel').onclick=downloadExcel;$('downloadJpeg').onclick=downloadJpeg;
 $('guideBtn').onclick=()=>$('guideDialog').showModal();document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$(b.dataset.close).close());
 $('proofPreview').onclick=()=>{if(!pendingImage)return;const w=window.open('','_blank');if(w){const im=w.document.createElement('img');im.src=pendingImage;im.style.maxWidth='100%';w.document.body.append(im);w.document.title='영수증 원본';}};
-try{await openDB();const saved=await readStore('settings');const profile=saved.find(x=>x.id==='profile');if(profile)settings={name:profile.name||'',title:profile.title||''};
+try{await openDB();const saved=await readStore('settings');const profile=saved.find(x=>x.id==='profile');if(profile)settings={name:profile.name||'',title:profile.title||'',isTeamLead:profile.isTeamLead===true};
  const reminder=saved.find(x=>x.id==='backupReminder');if(reminder)backupReminder={...backupReminder,...reminder};
  await reload();await migrateBackupSize();
  if(!reminder){const dates=all.map(x=>Date.parse(x.createdAt)).filter(n=>Number.isFinite(n)&&n>0&&n<=Date.now());if(dates.length)backupReminder.startedAt=dates.reduce((a,b)=>Math.min(a,b),Date.now());await writeStore('settings',[backupReminder]);renderBackupReminder();}}catch(e){toast('브라우저 저장소를 열지 못했습니다. 일반 브라우저 창에서 다시 접속해 주세요.');showError(e);}
