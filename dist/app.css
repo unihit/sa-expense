@@ -119,3 +119,29 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
 
 .search input{margin:0}
 @media(max-width:480px){.receipt-grid{grid-template-columns:minmax(0,1fr)}}
+
+/* Stable ledger columns share header and body alignment. */
+.expense-table{table-layout:fixed;min-width:800px;width:100%;font-size:14px}
+.expense-table .col-number{width:56px}
+.expense-table .col-date{width:80px}
+.expense-table .col-method{width:88px}
+.expense-table .col-amount{width:124px}
+.expense-table .col-proof{width:84px}
+.expense-table .col-edit{width:96px}
+.expense-table th,.expense-table td{padding:16px 14px;vertical-align:middle}
+.expense-table th{height:48px;padding-top:12px;padding-bottom:12px;font-size:12px;line-height:1.5;color:#5c6e61}
+.expense-table tbody tr{height:80px}
+.expense-table td{line-height:1.5}
+.expense-table th:nth-child(1),.expense-table td:nth-child(1),.expense-table th:nth-child(2),.expense-table td:nth-child(2),.expense-table th:nth-child(4),.expense-table td:nth-child(4),.expense-table th:nth-child(6),.expense-table td:nth-child(6),.expense-table th:nth-child(7),.expense-table td:nth-child(7){text-align:center}
+.expense-table th:nth-child(3),.expense-table td:nth-child(3){text-align:left}
+.expense-table th:nth-child(5),.expense-table td:nth-child(5){text-align:right}
+.expense-table td:nth-child(1),.expense-table td:nth-child(2),.expense-table .money{font-variant-numeric:tabular-nums}
+.expense-table .purpose-cell{min-width:0;max-width:none;white-space:normal;overflow-wrap:anywhere;word-break:normal}
+.expense-table .purpose-cell strong{line-height:1.55}
+.expense-table .purpose-cell small{display:block;margin-top:4px;line-height:1.5}
+.expense-table .method-pill{display:inline-flex;align-items:center;justify-content:center;min-width:44px;padding:4px 8px;line-height:1.5}
+.expense-table .proof-dot{display:inline-flex;align-items:center;justify-content:center;line-height:1.5}
+.expense-table .edit-row{min-width:64px;margin:0}
+.expense-table tbody tr:hover{background:#fafcf8}
+.expense-table tbody tr:last-child td{border-bottom:0}
+.expense-table .empty-message{padding:32px 14px;text-align:center!important}

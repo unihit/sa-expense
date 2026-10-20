@@ -5,8 +5,8 @@
 <meta name="theme-color" content="#23332d"><meta name="description" content="영수증부터 개인경비 정산까지, 설치 없이 한 곳에서.">
 <title>SA 개인경비 · 영수증 정리</title>
 <link rel="preload" href="vendor/fonts/NotoSansKR-Regular.woff" as="font" type="font/woff" crossorigin>
-<link rel="stylesheet" href="app.css?v=20261020-edit-search7">
-<script defer src="vendor/jszip.min.js"></script><script defer src="vendor/tesseract.min.js"></script><script type="module" src="app.js?v=20261020-edit-search7"></script>
+<link rel="stylesheet" href="app.css?v=20261020-table8">
+<script defer src="vendor/jszip.min.js"></script><script defer src="vendor/tesseract.min.js"></script><script type="module" src="app.js?v=20261020-table8"></script>
 </head>
 <body>
 <aside class="sidebar">
@@ -25,7 +25,7 @@
   <div class="work-layout"><section class="ledger-panel"><div class="panel-header"><div><h2 id="listTitle">경비 내역 <span id="listCount">0</span></h2><p id="listSubtitle">저장한 내역과 영수증을 한눈에 확인하세요.</p></div><button class="button export-button" id="exportBtn"><i data-icon="download"></i>제출 파일 만들기</button></div>
    <div class="filterbar"><div class="tabs" aria-label="경비 필터"><button class="selected" data-filter="all">전체</button><button data-filter="택시">택시</button><button data-filter="대중교통">대중교통</button><button data-filter="기타">기타</button></div><label class="search"><i data-icon="search"></i><input id="searchInput" type="search" placeholder="목적 또는 이동구간 검색" aria-label="업무 목적 또는 이동구간 검색"></label></div>
    <div id="dropZone" class="dropzone" tabindex="0" role="button" aria-label="영수증 파일 추가"><div class="upload-symbol"><i data-icon="upload"></i></div><strong>영수증을 여기에 놓아주세요</strong><p>또는 클릭해서 사진·PDF 선택</p><small>PNG, JPG, WEBP, PDF · 파일당 최대 20MB · 추가하면 자동 인식</small></div>
-   <div id="tableArea" class="table-area" hidden><table><thead><tr><th class="numcol">번호</th><th>사용일</th><th>업무 목적 / 이동구간</th><th>이용수단</th><th class="right">금액</th><th class="center">증빙</th><th class="center">수정</th></tr></thead><tbody id="expenseRows"></tbody></table></div>
+   <div id="tableArea" class="table-area" hidden><table class="expense-table"><colgroup><col class="col-number"><col class="col-date"><col class="col-purpose"><col class="col-method"><col class="col-amount"><col class="col-proof"><col class="col-edit"></colgroup><thead><tr><th class="numcol">번호</th><th>사용일</th><th>업무 목적 / 이동구간</th><th>이용수단</th><th class="right">금액</th><th class="center">증빙</th><th class="center">수정</th></tr></thead><tbody id="expenseRows"></tbody></table></div>
    <div id="receiptGrid" class="receipt-grid" hidden></div><div class="panel-footer"><span id="resultCaption">영수증을 추가하거나 직접 입력해 시작하세요.</span><span>KRW · 원</span></div>
   </section><aside class="context-column"><div class="workflow"><div class="section-kicker">QUICK GUIDE</div><h3>정산까지 세 단계</h3><ol><li><span>01</span><div><strong>영수증 추가</strong><p>사진이나 이용내역을 모아요.</p></div></li><li><span>02</span><div><strong>내용 확인 후 저장</strong><p>금액과 업무 목적을 확인해요.</p></div></li><li><span>03</span><div><strong>엑셀·JPEG 다운로드</strong><p>회사 양식 그대로 제출해요.</p></div></li></ol></div><div class="storage-note"><div class="note-icon"><i data-icon="lock"></i></div><h3>내 영수증은 내 브라우저에</h3><p>입력 내역과 영수증은 이 기기에 보관합니다. 다른 기기로 옮기거나 브라우저 데이터를 지우기 전, 백업해 주세요.</p><button id="backupInfo">백업·복원 열기 <span>→</span></button></div></aside></div>
   <footer class="page-footer"><span>SA EXPENSE</span><p>업무 경비를 위한 작은 정리 습관.</p><span>LOCAL FIRST</span></footer>
