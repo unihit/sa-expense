@@ -37,3 +37,18 @@ test('continued receipts stay within page limits and retain their original numbe
  const labels=pages.flatMap(p=>p.labels);assert.equal(labels.length,5);assert.ok(labels.every(x=>x.startsWith('1. 2월 12일')));
  assert.ok(labels[4].endsWith('5/5'));
 });
+test('JPEG pages contain at most six receipts and preserve numbering across page breaks',async()=>{
+ for(const [count,expected] of [[6,[6]],[7,[6,1]],[12,[6,6]],[13,[6,6,1]]]){
+  const {ctx,pages}=fixture({short:{naturalWidth:640,naturalHeight:200}});
+  await ctx.jpegPages(Array.from({length:count},()=>({method:'택시',image:'short',day:'2026-02-12'})));
+  assert.deepEqual(pages.map(p=>p.images.length),expected);
+  assert.deepEqual(pages.flatMap(p=>p.labels),Array.from({length:count},(_,i)=>`${i+1}. 2월 12일`));
+  assert.ok(pages.every(p=>p.height<=6000));
+ }
+});
+test('missing-proof entries also count towards the six-receipt page limit',async()=>{
+ const {ctx,pages}=fixture();
+ await ctx.jpegPages(Array.from({length:7},()=>({method:'택시',image:'',day:'2026-02-12'})));
+ assert.equal(pages.length,2);
+ assert.deepEqual(pages.map(p=>p.labels.filter(s=>/^\d+\./.test(s)).length),[6,1]);
+});

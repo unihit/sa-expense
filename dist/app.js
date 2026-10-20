@@ -490,7 +490,8 @@ async function jpegPages(list){
   parts.forEach((part,index)=>items.push({row,no:i+1,im,...part,part:index+1,partCount:parts.length}));
  }
  const groups=[];for(let i=0;i<items.length;i+=3){const group=items.slice(i,i+3);groups.push({items:group,height:Math.max(...group.map(x=>x.h))+90});}
- const pages=[];let current=[],height=100;for(const group of groups){const gap=current.length?50:0;if(current.length&&height+gap+group.height>6000){pages.push(current);current=[];height=100;}if(current.length)height+=50;current.push(group);height+=group.height;}if(current.length)pages.push(current);
+ // Three receipts per row, at most two rows per page; tall receipts may need an earlier break.
+ const pages=[];let current=[],height=100;for(const group of groups){const gap=current.length?50:0;if(current.length&&(current.length>=2||height+gap+group.height>6000)){pages.push(current);current=[];height=100;}if(current.length)height+=50;current.push(group);height+=group.height;}if(current.length)pages.push(current);
  const output=[];
  for(const page of pages){
   const c=document.createElement('canvas');c.width=2420;c.height=100+page.reduce((s,g)=>s+g.height,0)+(page.length-1)*50;
