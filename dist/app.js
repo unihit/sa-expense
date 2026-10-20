@@ -458,6 +458,25 @@ async function jpegPages(list){
 }
 async function downloadJpeg(){const list=rows();if(!list.length)return;busy(true,'영수증 목록을 이미지로 만들고 있습니다');try{const month=$('monthInput').value,pages=await jpegPages(list);if(pages.length===1)download(pages[0],`${month}_영수증.jpeg`);else{const zip=new JSZip();pages.forEach((blob,i)=>zip.file(`${month}_영수증_${String(i+1).padStart(2,'0')}.jpeg`,blob));download(await zip.generateAsync({type:'blob',compression:'STORE'}),`${month}_영수증.zip`);}toast('영수증 목록을 다운로드했습니다.');}catch(e){showError(e);}finally{busy(false);}}
 
+let receiptPasteBusy=false;
+function clipboardReceiptImages(data){
+ const supported=file=>file&&/^image\/(?:png|jpeg|webp|bmp)$/i.test(file.type);
+ const items=Array.from(data?.items||[]),fromItems=items.filter(item=>item.kind==='file'&&/^image\//i.test(item.type)).map(item=>item.getAsFile()).filter(supported);
+ return fromItems.length?fromItems:Array.from(data?.files||[]).filter(supported);
+}
+async function handleReceiptPaste(event){
+ const data=event.clipboardData,files=clipboardReceiptImages(data);if(!files.length)return;
+ // Keep normal text pasting in form fields, including rich clipboard selections with an image preview.
+ if(event.target?.closest?.('input,textarea,[contenteditable]:not([contenteditable="false"])')&&data.getData('text/plain'))return;
+ event.preventDefault();
+ if(ocrBusy||receiptPasteBusy||!$('busyOverlay').hidden){toast('현재 처리가 끝난 뒤 이미지를 붙여넣어 주세요.');return;}
+ const editorOpen=$('editor').open;
+ if(document.querySelector('dialog[open]')&&!editorOpen){toast('현재 창을 닫은 뒤 영수증 이미지를 붙여넣어 주세요.');return;}
+ if(editorOpen&&files.length!==1){toast('영수증 교체는 이미지 한 장만 붙여넣어 주세요.');return;}
+ receiptPasteBusy=true;
+ try{await filesToQueue(files,editorOpen);}catch(error){showError(error);}finally{receiptPasteBusy=false;}
+}
+
 // UI events
 $('monthInput').value=today().slice(0,7);$('monthInput').addEventListener('change',()=>{if($('monthInput').value)render();});$('prevMonth').onclick=()=>setMonth(-1);$('nextMonth').onclick=()=>setMonth(1);
 $('monthTrigger').onclick=showMonthPicker;$('prevYear').onclick=()=>shiftPickerYear(-1);$('nextYear').onclick=()=>shiftPickerYear(1);$('monthGrid').onclick=e=>{const b=e.target.closest('[data-month]');if(b)chooseMonth(Number(b.dataset.month));};
@@ -482,4 +501,5 @@ try{await openDB();const saved=await readStore('settings');const profile=saved.f
  if(!reminder){const dates=all.map(x=>Date.parse(x.createdAt)).filter(n=>Number.isFinite(n)&&n>0&&n<=Date.now());if(dates.length)backupReminder.startedAt=dates.reduce((a,b)=>Math.min(a,b),Date.now());await writeStore('settings',[backupReminder]);renderBackupReminder();}}catch(e){toast('브라우저 저장소를 열지 못했습니다. 일반 브라우저 창에서 다시 접속해 주세요.');showError(e);}
 
 setInterval(renderBackupReminder,60000);
+document.addEventListener('paste',handleReceiptPaste);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)renderBackupReminder();});
