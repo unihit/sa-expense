@@ -136,6 +136,8 @@ function timedTransitAmount(lines){
   // Some transport apps render '100원' at the right edge; OCR sometimes reads its 원 as %.
   // Never correct percentages in general receipts or without two dated transit records.
   const uncertain=block.filter(line=>/^\d{1,5}\s*%$/.test(line));
+  if(uncertain.length&&block.some(line=>/할인|적립|포인트|비율|퍼센트|수익률|증감률/.test(line)))return null;
+  records[i].currencyConfirmed=block.some(line=>/^(?:₩\s*\d[\d,]*|\d[\d,]*\s*(?:원|KRW))$/i.test(line));
   if(amounts.length===1&&uncertain.length===0){records[i].amount=amounts[0];records[i].uncertain=false;}
   else if(amounts.length===0&&uncertain.length===1){
    records[i].amount=Number(uncertain[0].replace(/\D/g,''));records[i].uncertain=true;
@@ -144,6 +146,7 @@ function timedTransitAmount(lines){
  }
  records.sort((a,b)=>a.minutes-b.minutes);const fares=records.map(r=>r.amount),amount=fares[0]+fares[1];
  if(!amount||records.every(r=>r.uncertain))return null;
+ if(records.some(r=>r.uncertain)&&!records.some(r=>!r.uncertain&&r.currencyConfirmed))return null;
  const warning=records.some(r=>r.uncertain)?' OCR에서 %로 읽힌 금액을 원으로 추정했습니다. 반드시 원본을 확인하세요.':'';
  return {amount,fares,note:`교통 이용내역 두 건 ${won(fares[0])}원 + ${won(fares[1])}원 = ${won(amount)}원을 합산했습니다. 같은 이동의 승차·하차인지 확인하세요.`+warning};
 }

@@ -75,11 +75,25 @@ test('시각 기준 교통비 합산 제한: 여러 이동·다른 날짜·불�
 });
 
 test('교통카드 화면의 100원 → 100% OCR 오인식은 제한적으로 보정',()=>{
- const raw='이용내역\\n버스·지하철\\n월상세\\n10/06 09:52\\n종각\\n100%\\n10/06 09:27\\n신도림\\n1,550원';
+ const raw='이용내역\n버스·지하철\n월상세\n02/12 11:40\n가역\n100%\n02/12 11:15\n나역\n1,550원';
  const result=ctx.parseOCR(raw);
  assert.equal(result.amount,1650);
  assert.deepEqual(Array.from(result.fares),[1550,100]);
  assert.match(result.notes.join(' '),/%로 읽힌/);
- assert.equal(ctx.parseOCR('100%\\n1,550원').amount,1550);
- assert.equal(ctx.parseOCR('버스·지하철\\n10/06 09:52\\n종각\\n100%\\n10/06 09:27\\n신도림\\n200%').amount,'');
+ assert.equal(ctx.parseOCR('100%\n1,550원').amount,1550);
+ assert.equal(ctx.parseOCR('버스·지하철\n02/12 11:40\n가역\n100%\n02/12 11:15\n나역\n200%').amount,'');
+});
+
+test('첫 인식의 금액 단위 오류는 깨진 보조 원문 때문에 사라지지 않음',()=>{
+ const first='이용내역\n최근\n버스-지하철\n월상세\n청구\n02/12 11:40\n100%\n가역\n02/12 11:15\n나역\n1,550원';
+ const auxiliary="청구\n이용내역 |\nGD 100%\n지하철\n11:40 ;\n12\n02/\n|하철 가역\nx4 나역\n지하철 시";
+ const result=ctx.parseOCR(first+'\n[보조 인식]\n'+auxiliary);
+ assert.equal(result.amount,1650);assert.equal(result.method,'지하철');
+ assert.match(result.notes.join(' '),/%로 읽힌/);
+});
+test('실제 백분율·서로 다른 날·여러 이동은 원으로 변환하지 않음',()=>{
+ const base='이용내역\n버스-지하철\n02/12 11:40\n100%\n가역\n02/12 11:15\n나역\n1,550원';
+ for(const text of [base.replace('100%','할인 100%'),base.replace('100%','할인율\n100%'),base.replace('1,550원','1550'),base.replace('02/12 11:15','02/11 11:15'),base+'\n02/12 12:00\n다역\n1500원'])assert.equal(ctx.parseOCR(text).amount,'',text);
+ assert.equal(ctx.parseOCR('결제금액 18,700원\n할인율 100%').amount,18700);
+ assert.deepEqual(Array.from(ctx.receiptAmounts('100%',true)),[]);
 });
