@@ -73,3 +73,13 @@ test('시각 기준 교통비 합산 제한: 여러 이동·다른 날짜·불�
  assert.equal(ctx.parseOCR(base).amount,1650);
  for(const text of [base.replace('10/20 08:19','10/19 08:19'),base.replace('08:19','01:19'),base+'\n10/20 08:50\n1550\n가역',base.replace('100\n','1004!\n'),base.replace('100\n','100\n200\n'),base.replace('버스-지하철','일반 거래')])assert.equal(ctx.parseOCR(text).amount,'',text);
 });
+
+test('교통카드 화면의 100원 → 100% OCR 오인식은 제한적으로 보정',()=>{
+ const raw='이용내역\\n버스·지하철\\n월상세\\n10/06 09:52\\n종각\\n100%\\n10/06 09:27\\n신도림\\n1,550원';
+ const result=ctx.parseOCR(raw);
+ assert.equal(result.amount,1650);
+ assert.deepEqual(Array.from(result.fares),[1550,100]);
+ assert.match(result.notes.join(' '),/%로 읽힌/);
+ assert.equal(ctx.parseOCR('100%\\n1,550원').amount,1550);
+ assert.equal(ctx.parseOCR('버스·지하철\\n10/06 09:52\\n종각\\n100%\\n10/06 09:27\\n신도림\\n200%').amount,'');
+});
