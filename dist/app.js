@@ -356,10 +356,41 @@ async function downloadExcel(){
  try{const month=$('monthInput').value;download(await createExcel(list,0),`${month}_개인경비.xlsx`);toast('입력한 내역과 합계만 보이도록 엑셀을 만들었습니다.');}catch(e){showError(e);}finally{busy(false);}
 }
 function canvasBlob(c){return new Promise((resolve,reject)=>c.toBlob(b=>b?resolve(b):reject(new Error('이미지 파일을 만들지 못했습니다.')),'image/jpeg',.95));}
+function jpegReceiptLayout(method,naturalWidth,naturalHeight){
+ const width=method==='택시'?640:/버스|지하철/.test(method)?740:700;
+ const height=Math.max(1,Math.round(naturalHeight*width/naturalWidth)),parts=[];
+ // Keep the same width even for very long receipts; continue them without shrinking the text.
+ for(let top=0;top<height;top+=4600)parts.push({w:width,h:Math.min(4600,height-top),sourceY:top*naturalHeight/height,sourceH:Math.min(4600,height-top)*naturalHeight/height});
+ return parts;
+}
 async function jpegPages(list){
- const groups=[];for(let i=0;i<list.length;i+=3){const group=[];for(let j=i;j<Math.min(i+3,list.length);j++){const row=list[j];let im=null,w=740,h=180;if(row.image){im=await imageElement(row.image);const scale=Math.min(740/im.naturalWidth,4600/im.naturalHeight,1);w=Math.round(im.naturalWidth*scale);h=Math.round(im.naturalHeight*scale);}group.push({row,no:j+1,im,w,h});}groups.push({items:group,height:Math.max(...group.map(x=>x.h))+90});}
- const pages=[];let current=[],height=100;for(const group of groups){if(current.length&&height+group.height+50>6000){pages.push(current);current=[];height=100;}current.push(group);height+=group.height+50;}if(current.length)pages.push(current);
- const output=[];for(const page of pages){const c=document.createElement('canvas');c.width=2420;c.height=100+page.reduce((s,g)=>s+g.height,0)+(page.length-1)*50;const ctx=c.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,c.width,c.height);let y=50;for(const group of page){group.items.forEach((item,col)=>{const x=50+col*790,month=Number(item.row.day.slice(5,7)),day=Number(item.row.day.slice(8));ctx.fillStyle='#111';ctx.font='44px "Malgun Gothic", "Apple SD Gothic Neo", sans-serif';ctx.fillText(`${item.no}. ${month}월 ${day}일`,x,y+45);if(item.im)ctx.drawImage(item.im,x,y+90,item.w,item.h);else{ctx.fillStyle='#999';ctx.font='32px sans-serif';ctx.fillText('증빙 없음 · 별도 확인',x,y+145);}});y+=group.height+50;}output.push(await canvasBlob(c));c.width=1;c.height=1;}return output;
+ const items=[];
+ for(let i=0;i<list.length;i++){
+  const row=list[i];
+  if(!row.image){items.push({row,no:i+1,im:null,w:740,h:180,part:1,partCount:1});continue;}
+  const im=await imageElement(row.image),parts=jpegReceiptLayout(row.method,im.naturalWidth,im.naturalHeight);
+  parts.forEach((part,index)=>items.push({row,no:i+1,im,...part,part:index+1,partCount:parts.length}));
+ }
+ const groups=[];for(let i=0;i<items.length;i+=3){const group=items.slice(i,i+3);groups.push({items:group,height:Math.max(...group.map(x=>x.h))+90});}
+ const pages=[];let current=[],height=100;for(const group of groups){const gap=current.length?50:0;if(current.length&&height+gap+group.height>6000){pages.push(current);current=[];height=100;}if(current.length)height+=50;current.push(group);height+=group.height;}if(current.length)pages.push(current);
+ const output=[];
+ for(const page of pages){
+  const c=document.createElement('canvas');c.width=2420;c.height=100+page.reduce((s,g)=>s+g.height,0)+(page.length-1)*50;
+  const ctx=c.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,c.width,c.height);ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';let y=50;
+  for(const group of page){
+   group.items.forEach((item,col)=>{
+    const x=50+col*790,month=Number(item.row.day.slice(5,7)),day=Number(item.row.day.slice(8));
+    ctx.fillStyle='#111';ctx.font=`${item.partCount>1?36:44}px "Malgun Gothic", "Apple SD Gothic Neo", sans-serif`;
+    const continuation=item.partCount>1?` · ${item.part}/${item.partCount}`:'';
+    ctx.fillText(`${item.no}. ${month}월 ${day}일${continuation}`,x,y+45);
+    if(item.im)ctx.drawImage(item.im,0,item.sourceY,item.im.naturalWidth,item.sourceH,x+(740-item.w)/2,y+90,item.w,item.h);
+    else{ctx.fillStyle='#999';ctx.font='32px sans-serif';ctx.fillText('증빙 없음 · 별도 확인',x,y+145);}
+   });
+   y+=group.height+50;
+  }
+  output.push(await canvasBlob(c));c.width=1;c.height=1;
+ }
+ return output;
 }
 async function downloadJpeg(){const list=rows();if(!list.length)return;busy(true,'영수증 목록을 이미지로 만들고 있습니다');try{const month=$('monthInput').value,pages=await jpegPages(list);if(pages.length===1)download(pages[0],`${month}_영수증.jpeg`);else{const zip=new JSZip();pages.forEach((blob,i)=>zip.file(`${month}_영수증_${String(i+1).padStart(2,'0')}.jpeg`,blob));download(await zip.generateAsync({type:'blob',compression:'STORE'}),`${month}_영수증.zip`);}toast('영수증 목록을 다운로드했습니다.');}catch(e){showError(e);}finally{busy(false);}}
 
