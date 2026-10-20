@@ -327,7 +327,13 @@ async function recognize(){
   $('ocrText').value=text;applyOCR(text,result);canvas.width=canvas.height=1;
  }catch(e){if(worker){await worker.terminate().catch(()=>{});worker=null;}$('ocrState').textContent='글자를 읽지 못했습니다. 직접 입력으로 계속할 수 있습니다.';showError(e);}finally{ocrBusy=false;$('ocrBtn').disabled=!pendingImage;$('saveExpense').disabled=false;$('replaceReceipt').disabled=false;}
 }
-function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.textContent=name+' · 다시 다운로드';a.className='download-ready';const host=$('downloadArea');host.closest('.context-column').classList.add('has-download');const old=host.querySelector('.download-ready');if(old){URL.revokeObjectURL(old.href);old.remove();}host.append(a);a.click();}
+function download(blob,name){
+ const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.className='download-ready';a.title=name;
+ const fileName=document.createElement('span');fileName.className='download-file-name';fileName.textContent=name;
+ const action=document.createElement('span');action.className='download-file-action';action.textContent='다시 다운로드';
+ a.append(fileName,action);
+ const host=$('downloadArea');host.closest('.context-column').classList.add('has-download');const old=host.querySelector('.download-ready');if(old){URL.revokeObjectURL(old.href);old.remove();}host.append(a);a.click();
+}
 
 async function backup(){try{
  const revision=backupReminder.revision;
