@@ -1,0 +1,13 @@
+const fs=require('node:fs');
+const path=require('node:path');
+const theme=process.argv[2];
+if(!['green','blue'].includes(theme))throw new Error('Choose green or blue.');
+const root=path.resolve(__dirname,'..'),snapshot=path.join(root,'theme-snapshots',theme),dist=path.join(root,'dist');
+for(const file of ['app.css','brand-mark.svg'])fs.copyFileSync(path.join(snapshot,file),path.join(dist,file));
+const index=path.join(dist,'index.html');
+const color=theme==='blue'?'#245391':'#23332d',version=Date.now()+'-'+theme;
+let html=fs.readFileSync(index,'utf8');
+html=html.replace(/(<meta name="theme-color" content=")[^"]+/,(_,prefix)=>prefix+color);
+html=html.replace(/(app\.css|app\.js|brand-mark\.svg)\?v=[^"\s]+/g,(_,file)=>file+'?v='+version);
+fs.writeFileSync(index,html);
+console.log('Applied '+theme+' theme locally. Review, commit, and push to deploy.');

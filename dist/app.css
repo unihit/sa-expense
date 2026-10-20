@@ -236,3 +236,9 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
 .setting-allowance{display:flex;justify-content:space-between;gap:10px;font-size:13px;color:#45566c;margin-top:16px;padding-top:12px;border-top:1px solid #d1dff2}
 .team-lead-setting p{font-size:11px;line-height:1.7;color:#62758b;margin:7px 0 0}
 @media(max-width:600px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.stats .primary-stat{grid-column:1/-1;min-height:0;padding:16px}.primary-stat .stat-number{margin:6px 0;font-size:28px}.allowance-meta{font-size:12px}.allowance-progress{margin:7px 0}.team-lead-setting{padding:14px}}
+
+/* Keep brand icon and its two text lines aligned as one compact unit. */
+.brand{gap:9px;line-height:1.2;letter-spacing:.35px;min-width:0}
+.brand>span{display:flex;flex-direction:column;justify-content:center;gap:4px;min-width:0;line-height:1.2}
+.brand small{margin:0;font-size:11px;line-height:1.35;white-space:nowrap}
+@media(max-width:800px){.brand>span{gap:3px}.brand small{font-size:11px}}

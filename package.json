@@ -2,6 +2,12 @@
   "name": "sa-expense-web",
   "version": "1.1.0",
   "private": true,
-  "scripts": { "test": "node --test tests/*.test.cjs" },
-  "devDependencies": { "@xmldom/xmldom": "^0.8.11" }
+  "scripts": {
+    "test": "node --test tests/*.test.cjs",
+    "theme:green": "node scripts/set-theme.cjs green",
+    "theme:blue": "node scripts/set-theme.cjs blue"
+  },
+  "devDependencies": {
+    "@xmldom/xmldom": "^0.8.11"
+  }
 }

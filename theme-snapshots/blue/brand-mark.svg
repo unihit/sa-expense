@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+<title>SA Expense</title>
+<rect width="64" height="64" rx="18" fill="#245391"/>
+<path d="M22 12h16l8 8v27l-4-3-4 3-4-3-4 3-4-3-4 3-4-3V16a4 4 0 0 1 4-4Z" fill="#fff"/>
+<path d="M38 12v8h8M25 25h13M25 31h11M25 37h6" stroke="#245391" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity=".65"/>
+<circle cx="45" cy="45" r="11" fill="#a9d5ff" stroke="#245391" stroke-width="2.5"/>
+<path d="m40.5 45 3 3 6-6.5" stroke="#245391" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
