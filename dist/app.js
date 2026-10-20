@@ -354,7 +354,7 @@ function download(blob,name){
 async function backup(){try{
  const revision=backupReminder.revision;
  const data={format:'sa-expense-web',version:1,exportedAt:new Date().toISOString(),settings,expenses:all};
- download(new Blob([JSON.stringify(data)],{type:'application/json'}),'SA_경비백업_'+today()+'.json');
+ download(new Blob([JSON.stringify(data)],{type:'application/json'}),'경비백업_'+today().slice(2).replaceAll('-','')+'.json');
  const snapshotBytes=new Blob([JSON.stringify({settings:data.settings,expenses:data.expenses})]).size;
  const next={...backupReminder,lastBackupAt:Date.now(),lastBackupBytes:snapshotBytes,backupRevision:revision,snoozedUntil:0};
  await writeStore('settings',[next]);backupReminder=next;renderBackupReminder();
