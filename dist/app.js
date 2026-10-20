@@ -133,11 +133,19 @@ function timedTransitAmount(lines){
   // Missing 승차/하차 and 원 are tolerated only when a standalone amount and a station-like text remain in each timed record.
   if(!block.some(line=>/[가-힣]{2}/.test(line)))return null;
   const amounts=block.filter(line=>/^(?:₩\s*)?(?:\d{1,3}(?:,\d{3})+|\d+)\s*(?:원|KRW)?$/i.test(line)).flatMap(line=>receiptAmounts(line,true,true));
-  if(amounts.length!==1||amounts[0]>100000)return null;records[i].amount=amounts[0];
+  // Some transport apps render '100원' at the right edge; OCR sometimes reads its 원 as %.
+  // Never correct percentages in general receipts or without two dated transit records.
+  const uncertain=block.filter(line=>/^\d{1,5}\s*%$/.test(line));
+  if(amounts.length===1&&uncertain.length===0){records[i].amount=amounts[0];records[i].uncertain=false;}
+  else if(amounts.length===0&&uncertain.length===1){
+   records[i].amount=Number(uncertain[0].replace(/\D/g,''));records[i].uncertain=true;
+  }else return null;
+  if(records[i].amount>100000)return null;
  }
  records.sort((a,b)=>a.minutes-b.minutes);const fares=records.map(r=>r.amount),amount=fares[0]+fares[1];
- if(!amount)return null;
- return {amount,fares,note:`교통 이용내역 두 건 ${won(fares[0])}원 + ${won(fares[1])}원 = ${won(amount)}원을 합산했습니다. 같은 이동의 승차·하차인지 확인하세요.`};
+ if(!amount||records.every(r=>r.uncertain))return null;
+ const warning=records.some(r=>r.uncertain)?' OCR에서 %로 읽힌 금액을 원으로 추정했습니다. 반드시 원본을 확인하세요.':'';
+ return {amount,fares,note:`교통 이용내역 두 건 ${won(fares[0])}원 + ${won(fares[1])}원 = ${won(amount)}원을 합산했습니다. 같은 이동의 승차·하차인지 확인하세요.`+warning};
 }
 function extractReceiptAmount(text){
  const lines=text.normalize('NFKC').split(/\r?\n/).map(x=>x.trim()).filter(Boolean),candidates=[];
