@@ -20,6 +20,7 @@ const icons = {
  chevronDown:'<path d="m6 9 6 6 6-6"/>',
  close:'<path d="m6 6 12 12M18 6 6 18"/>',
  scan:'<path d="M3 8V3h5m8 0h5v5m0 8v5h-5M8 21H3v-5M7 8h10M7 12h10M7 16h6"/>',
+ trash:'<path d="M3 6h18M9 6V3h6v3m-10 0 1 15h12l1-15M10 10v7m4-7v7"/>',
  sheet:'<path d="M5 3h10l4 4v14H5zM15 3v5h4M8 12h8M8 16h8M12 12v7"/>'
 };
 function hydrateIcons(root=document) { root.querySelectorAll('[data-icon]').forEach(el => {el.innerHTML=`<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${icons[el.dataset.icon]||icons.list}</svg>`;}); }

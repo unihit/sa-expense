@@ -207,3 +207,9 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
 .storage-note .support-action{font-size:13px;color:#36553a;padding:12px 0 0;margin-top:14px}
 @media(max-width:1200px){.context-column{display:none}.context-column.has-download{display:flex}.context-column.has-download .workflow{display:none}.sidebar-note.support-card{padding:15px 13px}.sidebar-note .support-heading{gap:9px}.sidebar-note .support-icon{width:32px;height:32px;flex-basis:32px}.sidebar-note .support-heading strong{font-size:14px}}
 @media(max-width:800px){.sidebar-note.support-card,.profile{display:none}}
+
+/* Distinct actions in the expense editor. */
+#editor .button.danger{background:var(--accent);color:#fff;box-shadow:0 3px 7px #d467481c}
+#editor .button.danger:hover{background:#bd573b}
+#editor #saveExpense{background:var(--green);color:#fff;box-shadow:0 3px 7px #273f3326}
+#editor #saveExpense:hover{background:#365543}
