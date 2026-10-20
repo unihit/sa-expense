@@ -22,7 +22,7 @@ function filesystem(){
 async function fixture(options={}){
  const {createFolderBackup}=await modulePromise,{root,state}=options.fs||filesystem();
  const revisions={current:'r0',expenses:[{id:'one',amount:1000}],profile:{name:'테스트',title:'',isTeamLead:false}};
- let saved=options.saved===undefined?{id:'folderBackup',handle:root,lastSyncedRevision:'r0',lastSyncedAt:1}:options.saved;
+ let saved=options.saved===undefined?{id:'folderBackup',handle:root,backupPath:'expense/backup.json',lastSyncedRevision:'r0',lastSyncedAt:1}:options.saved;
  const sleeps=[],states=[];let pickerCalls=0,generated=0;
  const makeFiles=()=>['개인경비.xlsx','영수증.zip','data.json'].map(name=>({name,blob:new Blob([name])}));
  const controller=createFolderBackup({supported:options.supported!==false,debounceMs:10,
@@ -38,7 +38,7 @@ async function fixture(options={}){
 test('connecting writes an all-month v1 snapshot, with profile data and no folder handle',async()=>{
  const f=await fixture({saved:null});assert.equal(f.controller.connected,false);
  assert.equal(await f.controller.connect(),true);assert.equal(f.pickerCalls,1);
- const data=JSON.parse(f.state.files.get('/working/data.json'));
+ const data=JSON.parse(f.state.files.get('/expense/backup.json'));
  assert.equal(data.format,'sa-expense-web');assert.equal(data.version,1);assert.equal(data.expenses.length,1);
  assert.deepEqual(Object.keys(data).sort(),['expenses','exportedAt','format','settings','version']);
  assert.deepEqual(data.settings,f.revisions.profile);assert.equal(f.saved.handle,f.root);
@@ -47,8 +47,15 @@ test('connecting writes an all-month v1 snapshot, with profile data and no folde
 test('rapid changes debounce into one write of the latest local snapshot',async()=>{
  const f=await fixture();for(let i=1;i<=3;i++){f.revisions.current='r'+i;f.revisions.expenses[0].amount=i;f.controller.changed();}
  await eventually(()=>f.saved.lastSyncedRevision==='r3'&&!f.status.writing);
- assert.equal(f.state.attempts,1);assert.equal(JSON.parse(f.state.files.get('/working/data.json')).expenses[0].amount,3);
+ assert.equal(f.state.attempts,1);assert.equal(JSON.parse(f.state.files.get('/expense/backup.json')).expenses[0].amount,3);
  await f.controller.disconnect();
+});
+test('an existing connection writes the renamed backup even when the data revision is unchanged',async()=>{
+ const fs=filesystem();fs.state.files.set('/working/data.json','previous backup');
+ const f=await fixture({fs,saved:{id:'folderBackup',handle:fs.root,lastSyncedRevision:'r0',lastSyncedAt:1}});
+ await eventually(()=>f.saved.backupPath==='expense/backup.json'&&!f.status.writing);
+ assert.equal(JSON.parse(f.state.files.get('/expense/backup.json')).version,1);
+ assert.equal(f.state.files.get('/working/data.json'),'previous backup');await f.controller.disconnect();
 });
 test('changes committed during a slow write get a second, current snapshot',async()=>{
  const f=await fixture();let release,entered;const started=new Promise(r=>entered=r),gate=new Promise(r=>release=r);
@@ -56,7 +63,7 @@ test('changes committed during a slow write get a second, current snapshot',asyn
  f.revisions.current='r1';const first=f.controller.retry();await started;
  f.revisions.current='r2';f.revisions.expenses.push({id:'two'});f.controller.changed();await wait(20);release();await first;
  await eventually(()=>f.saved.lastSyncedRevision==='r2'&&!f.status.writing);
- assert.equal(JSON.parse(f.state.files.get('/working/data.json')).expenses.length,2);assert.equal(f.state.maxActive,1);await f.controller.disconnect();
+ assert.equal(JSON.parse(f.state.files.get('/expense/backup.json')).expenses.length,2);assert.equal(f.state.maxActive,1);await f.controller.disconnect();
 });
 test('temporary failures retry at 1, 2, 4 seconds and only closed writes become successful',async()=>{
  const f=await fixture();f.state.failures=3;assert.equal(await f.controller.retry(),true);
@@ -83,7 +90,7 @@ test('a saved dirty revision resumes automatically without prompting after resta
  const next=await fixture({fs:{root:f.root,state:f.state},saved:{id:'folderBackup',handle:f.root,lastSyncedRevision:'old'}});
  await eventually(()=>next.saved.lastSyncedRevision==='r0'&&!next.status.writing);assert.equal(next.state.requests,0);await next.controller.disconnect();
 });
-test('working and monthly files share one writer and monthly files retain their exact names',async()=>{
+test('automatic backup and monthly files share one writer and monthly files retain their exact names',async()=>{
  const f=await fixture();await Promise.all([f.controller.retry(),f.controller.saveSubmission('2026-10',f.makeFiles())]);
  assert.equal(f.state.maxActive,1);for(const name of ['개인경비.xlsx','영수증.zip','data.json'])assert.equal(f.state.files.get('/2026-10/'+name),name);
  assert.equal(f.status.submissionPending,false);assert.equal(f.saved.pendingMonth,null);await f.controller.disconnect();
@@ -108,5 +115,5 @@ test('a different month cannot silently replace an unfinished submission',async(
 });
 test('disconnecting retains backup files and stops later automatic writes',async()=>{
  const f=await fixture();await f.controller.retry();await f.controller.disconnect();const attempts=f.state.attempts;
- f.revisions.current='r2';f.controller.changed();await wait(25);assert.equal(f.state.attempts,attempts);assert.equal(f.saved.handle,null);assert.ok(f.state.files.has('/working/data.json'));
+ f.revisions.current='r2';f.controller.changed();await wait(25);assert.equal(f.state.attempts,attempts);assert.equal(f.saved.handle,null);assert.ok(f.state.files.has('/expense/backup.json'));
 });

@@ -1,15 +1,16 @@
 // A one-way copy of IndexedDB. Folder contents never become application state.
+const BACKUP_PATH='expense/backup.json';
 export function createFolderBackup({readSetting,writeSetting,getSnapshot,getRevision,makeSubmission,onStatus,
  supported=typeof globalThis.showDirectoryPicker==='function',
  pickDirectory=options=>globalThis.showDirectoryPicker(options),
  sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms)),debounceMs=1500}){
- let handle=null,lastSyncedAt=0,lastSyncedRevision=null,dirty=false,permission='prompt';
+ let handle=null,lastSyncedAt=0,lastSyncedRevision=null,lastSyncedPath=null,dirty=false,permission='prompt';
  let error='',writing=false,retrying=false,timer=null,tail=Promise.resolve(),syncInFlight=null,pendingSubmission=null;
  const emit=()=>onStatus?.({supported,connected:!!handle,folderName:handle?.name||'',permission,
   pending:dirty,writing,retrying,error,submissionPending:!!pendingSubmission,pendingMonth:pendingSubmission?.month||null,lastSyncedAt});
  const enqueue=task=>{const result=tail.then(task);tail=result.catch(()=>{});return result;};
  const cancelTimer=()=>{clearTimeout(timer);timer=null;};
- const record=()=>({id:'folderBackup',handle,lastSyncedAt,lastSyncedRevision,pendingMonth:pendingSubmission?.month||null});
+ const record=()=>({id:'folderBackup',handle,lastSyncedAt,lastSyncedRevision,backupPath:lastSyncedPath,pendingMonth:pendingSubmission?.month||null});
  const permissionError=()=>Object.assign(new Error('폴더 쓰기 권한이 필요합니다.'),{name:'NotAllowedError'});
  async function writeFile(folder,name,blob){
   const file=await folder.getFileHandle(name,{create:true});
@@ -36,12 +37,12 @@ export function createFolderBackup({readSetting,writeSetting,getSnapshot,getRevi
    // Capture the data and its revision together, after the local commit completes.
    const snapshot=await getSnapshot();
    await withRetries(async()=>{
-    const working=await handle.getDirectoryHandle('working',{create:true});
-    await writeFile(working,'data.json',new Blob([JSON.stringify(snapshot.data)],{type:'application/json'}));
+    const expense=await handle.getDirectoryHandle('expense',{create:true});
+    await writeFile(expense,'backup.json',new Blob([JSON.stringify(snapshot.data)],{type:'application/json'}));
    });
    const nextAt=Date.now();
-   await writeSetting({...record(),lastSyncedAt:nextAt,lastSyncedRevision:snapshot.revision});
-   lastSyncedAt=nextAt;lastSyncedRevision=snapshot.revision;
+   await writeSetting({...record(),lastSyncedAt:nextAt,lastSyncedRevision:snapshot.revision,backupPath:BACKUP_PATH});
+   lastSyncedAt=nextAt;lastSyncedRevision=snapshot.revision;lastSyncedPath=BACKUP_PATH;
    dirty=(await getRevision())!==snapshot.revision;
    if(dirty&&!timer)schedule();
    return true;
@@ -73,9 +74,9 @@ export function createFolderBackup({readSetting,writeSetting,getSnapshot,getRevi
   try{
    const saved=await readSetting();
    if(saved?.handle?.kind==='directory'){
-    handle=saved.handle;lastSyncedAt=Number(saved.lastSyncedAt)||0;lastSyncedRevision=saved.lastSyncedRevision||null;
+    handle=saved.handle;lastSyncedAt=Number(saved.lastSyncedAt)||0;lastSyncedRevision=saved.lastSyncedRevision||null;lastSyncedPath=saved.backupPath||null;
     if(/^\d{4}-(?:0[1-9]|1[0-2])$/.test(saved.pendingMonth||''))pendingSubmission={month:saved.pendingMonth,files:null};
-    dirty=(await getRevision())!==lastSyncedRevision;
+    dirty=(await getRevision())!==lastSyncedRevision||saved.backupPath!==BACKUP_PATH;
     permission=await handle.queryPermission({mode:'readwrite'});
     if(permission==='granted'&&dirty)schedule();
    }
@@ -91,7 +92,7 @@ export function createFolderBackup({readSetting,writeSetting,getSnapshot,getRevi
   cancelTimer();
   await enqueue(async()=>{
    await writeSetting({id:'folderBackup',handle:selected,lastSyncedAt:0,lastSyncedRevision:null,pendingMonth:null});
-   handle=selected;permission='granted';dirty=true;lastSyncedAt=0;lastSyncedRevision=null;error='';pendingSubmission=null;emit();
+   handle=selected;permission='granted';dirty=true;lastSyncedAt=0;lastSyncedRevision=null;lastSyncedPath=null;error='';pendingSubmission=null;emit();
   });
   return sync();
  }
@@ -123,7 +124,7 @@ export function createFolderBackup({readSetting,writeSetting,getSnapshot,getRevi
   cancelTimer();
   return enqueue(async()=>{
    await writeSetting({id:'folderBackup',handle:null,lastSyncedAt:0,lastSyncedRevision:null,pendingMonth:null});
-   handle=null;lastSyncedAt=0;lastSyncedRevision=null;dirty=false;pendingSubmission=null;error='';permission='prompt';emit();
+   handle=null;lastSyncedAt=0;lastSyncedRevision=null;lastSyncedPath=null;dirty=false;pendingSubmission=null;error='';permission='prompt';emit();
   });
  }
  return {initialize,connect,changed,retry,authorize,saveSubmission,disconnect,
