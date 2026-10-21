@@ -1,4 +1,5 @@
-import {createFolderBackup} from './folder-backup.mjs?v=20261021-expense-backup';
+import {createFolderBackup} from './folder-backup.mjs?v=20261021-backup-status';
+import {folderBackupView} from './folder-backup-view.mjs?v=20261021-backup-status';
 const $ = id => document.getElementById(id);
 const icons = {
  grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
@@ -60,9 +61,9 @@ function renderBackupReminder(){
  const host=$('backupReminder');if(!host)return;
  const status=backupReminderStatus(all.length,backupBytes,backupReminder);host.hidden=!status;if(!status)return;
  const reasons=[];
- if(status.overdue)reasons.push(backupReminder.lastBackupAt?'마지막 백업 후 '+status.days+'일이 지났습니다.':'백업 없이 자료를 보관한 지 '+status.days+'일이 지났습니다.');
- if(status.large)reasons.push(backupReminder.lastBackupAt?'마지막 백업 이후 저장 데이터가 약 '+status.megabytes+'MB 늘었습니다.':'백업하지 않은 저장 데이터가 약 '+status.megabytes+'MB입니다.');
- $('backupReminderText').textContent=reasons.join(' ')+' 아직 백업하지 않은 변경 내용이 있습니다. 모든 월의 내역과 영수증을 파일로 보관해 주세요.';
+ if(status.overdue)reasons.push(backupReminder.lastBackupAt?'마지막 전체 백업 다운로드 후 '+status.days+'일이 지났습니다.':'전체 백업 파일을 내려받지 않고 자료를 보관한 지 '+status.days+'일이 지났습니다.');
+ if(status.large)reasons.push(backupReminder.lastBackupAt?'마지막 전체 백업 다운로드 이후 저장 데이터가 약 '+status.megabytes+'MB 늘었습니다.':'별도 파일로 내려받지 않은 저장 데이터가 약 '+status.megabytes+'MB입니다.');
+ $('backupReminderText').textContent=reasons.join(' ')+' 폴더 자동 백업과 별도로, 모든 월의 내역과 영수증을 전체 백업 파일로도 보관해 주세요.';
 }
 async function snoozeBackupReminder(){
  const next={...backupReminder,snoozedUntil:Date.now()+86400000};
@@ -416,21 +417,19 @@ async function readBackupSnapshot(){
    settings:{name:profile.name||'',title:profile.title||'',isTeamLead:profile.isTeamLead===true},expenses:expenses.map(normalizeTransitMethod)}};
 }
 function renderFolderBackup(state){
- $('folderBackupControls').hidden=!state.supported;$('folderBadge').hidden=!state.supported;$('saveSubmission').hidden=!state.supported;
+ $('folderNotice').hidden=true;$('folderBackupControls').hidden=!state.supported;$('folderBadge').hidden=!state.supported;$('saveSubmission').hidden=!state.supported;
  if(!state.supported)return;
- let label='백업 폴더 연결 필요',detail='자동 백업할 전용 폴더를 선택해 주세요.';
- if(state.connected){
-  if(state.writing)label=state.retrying?'폴더 저장 재시도 중':'폴더 저장 중';
-  else if(state.permission!=='granted'||state.error==='permission')label='백업 폴더 연결 필요';
-  else if(state.error||state.submissionPending)label='마지막 저장 실패(재시도)';
-  else if(state.pending)label='폴더 저장 대기 중';
-  else if(state.lastSyncedAt)label='폴더 백업 완료 · '+new Date(state.lastSyncedAt).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false});
-  detail=state.folderName+' · '+(state.submissionPending?state.pendingMonth+' 제출 파일 저장이 남아 있습니다. 재시도하면 해당 월의 파일 묶음을 다시 저장합니다.':state.error||state.permission!=='granted'?'브라우저에는 저장됐습니다. 폴더 연결·권한을 확인한 뒤 재시도하세요.':'내역은 브라우저에 먼저 저장하고 이 폴더로 자동 백업합니다.');
- }
- for(const id of ['folderStatus','folderBadge']){$(id).textContent=label;$(id).dataset.state=state.error||state.submissionPending?'error':state.pending?'pending':'ready';}
- $('folderDetail').textContent=detail;$('connectFolderLabel').textContent=state.connected?'백업 폴더 변경':'백업 폴더 연결';
+ const display=folderBackupView(state);
+ for(const id of ['folderStatus','folderBadge']){$(id).textContent=display.label;$(id).dataset.state=display.tone;}
+ $('folderBadge').setAttribute('aria-label',display.label+' · 폴더 백업 설정 열기');
+ $('folderNotice').hidden=!display.notice;
+ $('folderNoticeTitle').textContent=display.noticeTitle;$('folderNoticeText').textContent=display.noticeText;
+ $('folderNoticeRetry').textContent=display.retryLabel;$('folderNoticeRetry').disabled=display.busy;
+ $('folderLastSaved').textContent=state.connected?display.lastSuccess:'';
+ $('folderDetail').textContent=display.detail;$('connectFolderLabel').textContent=state.connected?'백업 폴더 변경':'백업 폴더 연결';
+ $('retryFolder').textContent=display.retryLabel;
  $('retryFolder').hidden=!state.connected;$('disconnectFolder').hidden=!state.connected;
- for(const id of ['connectFolder','retryFolder','disconnectFolder'])$(id).disabled=state.writing;
+ for(const id of ['connectFolder','retryFolder','disconnectFolder'])$(id).disabled=display.busy;
  $('submissionLabel').textContent=state.connected?'월별 제출 묶음 저장':'월별 제출 묶음 다운로드';
  $('submissionHelp').textContent=state.connected?'연결 폴더에 엑셀·영수증 ZIP·전체 백업 저장':'엑셀·영수증 ZIP·전체 백업을 하나의 ZIP으로';
 }
@@ -614,6 +613,9 @@ $('connectFolder').onclick=async()=>{try{await folderBackup.connect();}catch(e){
 $('retryFolder').onclick=async()=>{try{if(await folderBackup.retry())toast('연결한 폴더에 백업했습니다.');}catch(e){showError(e);}};
 $('disconnectFolder').onclick=async()=>{try{await folderBackup.disconnect();toast('폴더 연결을 해제했습니다. 저장된 파일은 그대로 남습니다.');}catch(e){showError(e);}};
 $('saveSubmission').onclick=saveSubmission;
+$('folderNoticeRetry').onclick=$('retryFolder').onclick;
+$('folderNoticeSettings').onclick=()=>$('backupDialog').showModal();
+$('folderNoticeDownload').onclick=backup;
 function renderSettingLimit(){$('settingLimit').textContent='월 '+won($('settingTeamLead').checked?300000:200000)+'원';}
 $('settingTeamLead').onchange=renderSettingLimit;
 $('navSettings').onclick=()=>{$('settingName').value=settings.name;$('settingTitle').value=settings.title;$('settingTeamLead').checked=settings.isTeamLead===true;renderSettingLimit();$('settingsDialog').showModal();};$('settingsForm').onsubmit=async e=>{e.preventDefault();try{settings={name:$('settingName').value.trim(),title:$('settingTitle').value.trim(),isTeamLead:$('settingTeamLead').checked};await writeStore('settings',[{id:'profile',...settings}]);$('settingsDialog').close();render();toast('기본 정보를 저장했습니다.');}catch(e){showError(e);}};
@@ -628,4 +630,4 @@ try{await openDB();const saved=await readStore('settings');const profile=saved.f
 await folderBackup.initialize();
 setInterval(renderBackupReminder,60000);
 document.addEventListener('paste',handleReceiptPaste);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)renderBackupReminder();});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){renderBackupReminder();void folderBackup.refreshPermission();}});

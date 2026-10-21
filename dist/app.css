@@ -255,6 +255,17 @@ html{scrollbar-gutter:stable}
 .folder-actions{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:9px}
 .folder-actions .text-button{font-size:12px}
 .folder-help{border-top:1px solid var(--line);padding-top:10px}
+.folder-badge[data-state="pending"]{background:#fff8e9;border-color:#e1c68d;color:#685025}
+.folder-badge[data-state="ready"]{background:#eef6f0;border-color:#c7ddcc;color:#365b41}
+.folder-last-saved{font-size:11px;color:#62758b;line-height:1.7;margin:6px 0 0}
+.folder-last-saved:empty{display:none}
+.folder-notice{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:20px;padding:17px 20px;border:1px solid #edcfbc;border-radius:10px;background:#fff4ed;color:#7a432e}
+.folder-notice-copy{flex:1 1 260px;min-width:0}
+.folder-notice-copy strong{font-size:14px}
+.folder-notice-copy p{font-size:13px;line-height:1.8;margin:5px 0 0;overflow-wrap:anywhere}
+.folder-notice-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.folder-notice-actions .button,.folder-notice-actions .text-button{font-size:12px}
+@media(max-width:600px){.folder-notice{padding:14px}.folder-notice-actions{width:100%}.folder-notice-actions .button{flex:1}.folder-notice-actions .text-button{flex-basis:100%;justify-content:center}}
 @media(max-width:600px){.topbar{height:auto;min-height:48px;gap:8px;padding-top:8px;padding-bottom:8px}.storage-badges{gap:4px}.folder-badge{font-size:11px;padding:4px 6px}.folder-backup-controls{padding:12px}}
 @supports not (scrollbar-gutter:stable){html{overflow-y:scroll}}
 

@@ -12,7 +12,7 @@ function filesystem(){
    async getFileHandle(name,options){assert.equal(options.create,true);const file=prefix+'/'+name;return {async createWritable(){
     state.active++;state.maxActive=Math.max(state.maxActive,state.active);let bytes;
     return {async write(blob){state.attempts++;if(state.beforeWrite)await state.beforeWrite(file);
-     if(state.failures-->0||state.failPath===file)throw Object.assign(new Error('Offline'),{name:'NotFoundError'});bytes=await blob.text();},
+     if(state.failures-->0||state.failPath===file)throw Object.assign(new Error('Offline'),{name:state.errorName||'NotFoundError'});bytes=await blob.text();},
      async close(){state.files.set(file,bytes);state.active--;},async abort(){state.active--;}};
    }};}
   };
@@ -26,7 +26,7 @@ async function fixture(options={}){
  const sleeps=[],states=[];let pickerCalls=0,generated=0;
  const makeFiles=()=>['개인경비.xlsx','영수증.zip','data.json'].map(name=>({name,blob:new Blob([name])}));
  const controller=createFolderBackup({supported:options.supported!==false,debounceMs:10,
-  readSetting:async()=>saved,writeSetting:async value=>{saved={...value};},
+  readSetting:async()=>saved,writeSetting:async value=>{if(options.failMetadata&&value.failure)throw new Error('Metadata storage unavailable');saved={...value};},
   getRevision:async()=>revisions.current,
   getSnapshot:async()=>({revision:revisions.current,data:{format:'sa-expense-web',version:1,exportedAt:new Date().toISOString(),settings:{...revisions.profile},expenses:revisions.expenses.map(x=>({...x}))}}),
   makeSubmission:async()=>{generated++;return makeFiles();},
@@ -72,7 +72,7 @@ test('temporary failures retry at 1, 2, 4 seconds and only closed writes become 
 test('exhausted writes remain pending without mutating local expenses and can be retried',async()=>{
  const f=await fixture();f.revisions.current='r1';f.state.failures=10;
  assert.equal(await f.controller.retry(),false);assert.equal(f.state.attempts,4);assert.equal(f.saved.lastSyncedAt,1);
- assert.equal(f.status.pending,true);assert.equal(f.status.error,'write');assert.equal(f.revisions.expenses.length,1);
+ assert.equal(f.status.pending,true);assert.equal(f.status.error,'missing');assert.equal(f.revisions.expenses.length,1);
  await wait(25);assert.equal(f.state.attempts,4);
  f.state.failures=0;assert.equal(await f.controller.retry(),true);assert.equal(f.saved.lastSyncedRevision,'r1');await f.controller.disconnect();
 });
@@ -116,4 +116,32 @@ test('a different month cannot silently replace an unfinished submission',async(
 test('disconnecting retains backup files and stops later automatic writes',async()=>{
  const f=await fixture();await f.controller.retry();await f.controller.disconnect();const attempts=f.state.attempts;
  f.revisions.current='r2';f.controller.changed();await wait(25);assert.equal(f.state.attempts,attempts);assert.equal(f.saved.handle,null);assert.ok(f.state.files.has('/expense/backup.json'));
+});
+test('exhausted failures survive restart and further edits without another automatic retry cycle',async()=>{
+ const f=await fixture();f.state.failures=20;f.revisions.current='r1';assert.equal(await f.controller.retry(),false);
+ assert.equal(f.saved.failure.kind,'missing');assert.equal(f.saved.failure.attempts,3);
+ const next=await fixture({fs:{root:f.root,state:f.state},saved:f.saved});
+ next.revisions.current='r2';next.controller.changed();await wait(30);
+ assert.equal(next.state.attempts,4);assert.equal(next.status.error,'missing');assert.equal(next.status.pending,true);
+ next.state.failures=0;assert.equal(await next.controller.retry(),true);assert.equal(next.saved.failure,null);await next.controller.disconnect();
+});
+test('storage and path-conflict failures wait for user action without futile automatic retries',async()=>{
+ for(const [name,kind] of [['QuotaExceededError','storage'],['TypeMismatchError','conflict'],['SecurityError','permission']]){
+  const f=await fixture();f.state.errorName=name;f.state.failures=10;
+  assert.equal(await f.controller.retry(),false);assert.equal(f.state.attempts,1);assert.deepEqual(f.sleeps,[]);assert.equal(f.status.error,kind);await f.controller.disconnect();
+ }
+});
+test('double retry clicks share one permission request and one write',async()=>{
+ const fs=filesystem();fs.state.permission='prompt';const f=await fixture({fs});
+ const [a,b]=await Promise.all([f.controller.retry(),f.controller.retry()]);
+ assert.equal(a,true);assert.equal(b,true);assert.equal(f.state.requests,1);assert.equal(f.state.attempts,1);await f.controller.disconnect();
+});
+test('failure-metadata errors do not reject the local-save/background-backup flow',async()=>{
+ const f=await fixture({failMetadata:true});f.state.failures=10;
+ assert.equal(await f.controller.retry(),false);assert.equal(f.status.pending,true);assert.equal(f.revisions.expenses.length,1);await f.controller.disconnect();
+});
+test('visibility permission refresh never prompts or restarts an exhausted writer',async()=>{
+ const f=await fixture();f.state.failures=10;assert.equal(await f.controller.retry(),false);
+ f.state.permission='prompt';await f.controller.refreshPermission();
+ assert.equal(f.status.permission,'prompt');assert.equal(f.state.requests,0);await wait(20);assert.equal(f.state.attempts,4);await f.controller.disconnect();
 });
