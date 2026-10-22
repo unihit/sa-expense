@@ -124,7 +124,7 @@ export function createFolderBackup({readSetting,writeSetting,getSnapshot,getRevi
   return sync();
  }
  async function saveSubmission(month,files){
-  if(!/^\d{4}-(?:0[1-9]|1[0-2])$/.test(month)||files.some(f=>!['개인경비.xlsx','영수증.zip','data.json'].includes(f.name)))throw new Error('Invalid submission files');
+  if(!/^\d{4}-(?:0[1-9]|1[0-2])$/.test(month)||files.some(f=>![month+'_개인경비.xlsx','영수증.zip','data.json'].includes(f.name)))throw new Error('Invalid submission files');
   return enqueue(async()=>{
    if(!handle)throw permissionError();
    if(pendingSubmission&&pendingSubmission.month!==month)throw new Error('미완료된 '+pendingSubmission.month+' 제출 파일을 먼저 재시도해 주세요.');

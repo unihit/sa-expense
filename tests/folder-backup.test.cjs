@@ -24,12 +24,12 @@ async function fixture(options={}){
  const revisions={current:'r0',expenses:[{id:'one',amount:1000}],profile:{name:'테스트',title:'',isTeamLead:false}};
  let saved=options.saved===undefined?{id:'folderBackup',handle:root,backupPath:'expense/backup.json',lastSyncedRevision:'r0',lastSyncedAt:1}:options.saved;
  const sleeps=[],states=[];let pickerCalls=0,generated=0;
- const makeFiles=()=>['개인경비.xlsx','영수증.zip','data.json'].map(name=>({name,blob:new Blob([name])}));
+ const makeFiles=(month='2026-10')=>[month+'_개인경비.xlsx','영수증.zip','data.json'].map(name=>({name,blob:new Blob([name])}));
  const controller=createFolderBackup({supported:options.supported!==false,debounceMs:10,
   readSetting:async()=>saved,writeSetting:async value=>{if(options.failMetadata&&value.failure)throw new Error('Metadata storage unavailable');saved={...value};},
   getRevision:async()=>revisions.current,
   getSnapshot:async()=>({revision:revisions.current,data:{format:'sa-expense-web',version:1,exportedAt:new Date().toISOString(),settings:{...revisions.profile},expenses:revisions.expenses.map(x=>({...x}))}}),
-  makeSubmission:async()=>{generated++;return makeFiles();},
+  makeSubmission:async month=>{generated++;return makeFiles(month);},
   sleep:async ms=>{sleeps.push(ms);},onStatus:s=>states.push(s),
   pickDirectory:async args=>{pickerCalls++;assert.equal(args.mode,'readwrite');if(options.cancelPicker)throw Object.assign(new Error(),{name:'AbortError'});return root;}});
  await controller.initialize();
@@ -92,7 +92,7 @@ test('a saved dirty revision resumes automatically without prompting after resta
 });
 test('automatic backup and monthly files share one writer and monthly files retain their exact names',async()=>{
  const f=await fixture();await Promise.all([f.controller.retry(),f.controller.saveSubmission('2026-10',f.makeFiles())]);
- assert.equal(f.state.maxActive,1);for(const name of ['개인경비.xlsx','영수증.zip','data.json'])assert.equal(f.state.files.get('/2026-10/'+name),name);
+ assert.equal(f.state.maxActive,1);for(const name of ['2026-10_개인경비.xlsx','영수증.zip','data.json'])assert.equal(f.state.files.get('/2026-10/'+name),name);
  assert.equal(f.status.submissionPending,false);assert.equal(f.saved.pendingMonth,null);await f.controller.disconnect();
 });
 test('partial submission failure is pending, survives restart and is regenerated on manual retry',async()=>{
@@ -110,7 +110,7 @@ test('unsupported browsers and picker cancellation preserve the download-only fl
 test('a different month cannot silently replace an unfinished submission',async()=>{
  const f=await fixture();f.state.failPath='/2026-10/영수증.zip';
  await assert.rejects(f.controller.saveSubmission('2026-10',f.makeFiles()));
- await assert.rejects(f.controller.saveSubmission('2026-11',f.makeFiles()),/2026-10/);
+ await assert.rejects(f.controller.saveSubmission('2026-11',f.makeFiles('2026-11')),/2026-10/);
  assert.equal(f.saved.pendingMonth,'2026-10');assert.equal(f.status.pendingMonth,'2026-10');await f.controller.disconnect();
 });
 test('disconnecting retains backup files and stops later automatic writes',async()=>{

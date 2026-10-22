@@ -1,4 +1,4 @@
-import {createFolderBackup} from './folder-backup.mjs?v=20261021-backup-status';
+import {createFolderBackup} from './folder-backup.mjs?v=20261022-month-filename';
 import {folderBackupView} from './folder-backup-view.mjs?v=20261021-backup-status';
 const $ = id => document.getElementById(id);
 const icons = {
@@ -446,7 +446,7 @@ async function createSubmissionFiles(month){
  if(!list.length)throw new Error('저장된 경비를 먼저 추가해 주세요.');
  const excel=await createExcel(list,0,data.settings),pages=await jpegPages(list),receipts=new JSZip();
  pages.forEach((blob,i)=>receipts.file(`${month}_영수증_${String(i+1).padStart(2,'0')}.jpeg`,blob));
- return [{name:'개인경비.xlsx',blob:excel},{name:'영수증.zip',blob:await receipts.generateAsync({type:'blob',compression:'STORE'})},
+ return [{name:month+'_개인경비.xlsx',blob:excel},{name:'영수증.zip',blob:await receipts.generateAsync({type:'blob',compression:'STORE'})},
   {name:'data.json',blob:new Blob([JSON.stringify(data)],{type:'application/json'})}];
 }
 async function downloadSubmissionFiles(month,files){
