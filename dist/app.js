@@ -29,7 +29,7 @@ function hydrateIcons(root=document) { root.querySelectorAll('[data-icon]').forE
 hydrateIcons();
 const NS='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 let db, all=[], settings={name:'',title:'',isTeamLead:false}, view='ledger', filter='all', queue=[], editing=null, pendingImage='', pendingDigest='', worker=null, ocrBusy=false;
-let backupReminder={id:'backupReminder',revision:'initial',startedAt:Date.now(),lastBackupAt:0,lastBackupBytes:null,backupRevision:null,snoozedUntil:0},backupBytes=0;
+let backupReminder={id:'backupReminder',revision:'initial',startedAt:Date.now(),lastBackupAt:0,lastBackupBytes:null,backupRevision:null,snoozedUntil:0},backupBytes=0,folderBackupConnected=null;
 let toastTimer,monthPickerYear=new Date().getFullYear();
 function toast(message) { $('toast').textContent=message; $('toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('show'),6000); }
 function showError(error) {console.error(error);toast(error.message||String(error));}
@@ -48,8 +48,8 @@ async function writeStore(name,items,removeId=null){
  return new Promise((resolve,reject)=>{const tx=db.transaction(changed?['expenses','settings']:name,'readwrite');const store=tx.objectStore(name);if(removeId)store.delete(removeId);for(const item of items)store.put(item);if(next)tx.objectStore('settings').put(next);tx.oncomplete=()=>{if(next)backupReminder=next;resolve();if(next&&typeof notifyFolderChange==='function')notifyFolderChange();};tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||new Error('저장 공간이 부족하거나 저장을 완료하지 못했습니다. 백업 후 확인해 주세요.'));});
 }
 async function reload(){all=(await readStore('expenses')).map(normalizeTransitMethod);backupBytes=new Blob([JSON.stringify({settings,expenses:all})]).size;render();}
-function backupReminderStatus(count,bytes,state,now=Date.now()){
- if(!count||state.backupRevision===state.revision||now<state.snoozedUntil)return null;
+function backupReminderStatus(count,bytes,state,now=Date.now(),folderConnected=false){
+ if(folderConnected||!count||state.backupRevision===state.revision||now<state.snoozedUntil)return null;
  const baseline=state.lastBackupAt||state.startedAt;
  const days=Math.max(0,Math.floor((now-baseline)/86400000));
  const baseBytes=state.lastBackupAt?(Number.isFinite(state.lastBackupBytes)&&state.lastBackupBytes>=0?state.lastBackupBytes:bytes):0;
@@ -59,11 +59,11 @@ function backupReminderStatus(count,bytes,state,now=Date.now()){
 }
 function renderBackupReminder(){
  const host=$('backupReminder');if(!host)return;
- const status=backupReminderStatus(all.length,backupBytes,backupReminder);host.hidden=!status;if(!status)return;
+ const status=folderBackupConnected===null?null:backupReminderStatus(all.length,backupBytes,backupReminder,Date.now(),folderBackupConnected);host.hidden=!status;if(!status)return;
  const reasons=[];
  if(status.overdue)reasons.push(backupReminder.lastBackupAt?'마지막 전체 백업 다운로드 후 '+status.days+'일이 지났습니다.':'전체 백업 파일을 내려받지 않고 자료를 보관한 지 '+status.days+'일이 지났습니다.');
  if(status.large)reasons.push(backupReminder.lastBackupAt?'마지막 전체 백업 다운로드 이후 저장 데이터가 약 '+status.megabytes+'MB 늘었습니다.':'별도 파일로 내려받지 않은 저장 데이터가 약 '+status.megabytes+'MB입니다.');
- $('backupReminderText').textContent=reasons.join(' ')+' 폴더 자동 백업과 별도로, 모든 월의 내역과 영수증을 전체 백업 파일로도 보관해 주세요.';
+ $('backupReminderText').textContent=reasons.join(' ')+' 모든 월의 내역과 영수증을 전체 백업 파일로 보관해 주세요.';
 }
 async function snoozeBackupReminder(){
  const next={...backupReminder,snoozedUntil:Date.now()+86400000};
@@ -417,6 +417,7 @@ async function readBackupSnapshot(){
    settings:{name:profile.name||'',title:profile.title||'',isTeamLead:profile.isTeamLead===true},expenses:expenses.map(normalizeTransitMethod)}};
 }
 function renderFolderBackup(state){
+ folderBackupConnected=!!state.connected;renderBackupReminder();
  $('folderNotice').hidden=true;$('folderBackupControls').hidden=!state.supported;$('folderBadge').hidden=!state.supported;$('saveSubmission').hidden=!state.supported;
  if(!state.supported)return;
  const display=folderBackupView(state);

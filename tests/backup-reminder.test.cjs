@@ -4,11 +4,33 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const source=fs.readFileSync('dist/app.js','utf8');
 const DAY=86400000, MB=1024*1024, now=1800000000000;
-function status(overrides={},count=1,bytes=1){
+function status(overrides={},count=1,bytes=1,folderConnected=false){
  const ctx=vm.createContext({Date});
  vm.runInContext(source.slice(source.indexOf('function backupReminderStatus('),source.indexOf('\nfunction renderBackupReminder(')),ctx);
- return ctx.backupReminderStatus(count,bytes,{revision:'new',backupRevision:null,startedAt:now-29*DAY,lastBackupAt:0,snoozedUntil:0,...overrides},now);
+ return ctx.backupReminderStatus(count,bytes,{revision:'new',backupRevision:null,startedAt:now-29*DAY,lastBackupAt:0,snoozedUntil:0,...overrides},now,folderConnected);
 }
+test('a connected folder suppresses both age and size reminders without resetting backup history',()=>{
+ assert.equal(status({startedAt:now-90*DAY},2,200*MB,true),null);
+ assert.ok(status({startedAt:now-90*DAY},2,200*MB,false));
+});
+test('folder connection, failure and disconnection update the two notices independently',async()=>{
+ const {folderBackupView}=await import('../dist/folder-backup-view.mjs');
+ const fields=new Map();
+ const $=id=>{if(!fields.has(id))fields.set(id,{hidden:true,textContent:'',dataset:{},setAttribute(){}});return fields.get(id);};
+ const history={revision:'new',backupRevision:'old',lastBackupAt:Date.now()-90*DAY,lastBackupBytes:0,snoozedUntil:0};
+ const context=vm.createContext({Date,Number,$,folderBackupView,all:[{id:'one'}],backupBytes:200*MB,backupReminder:history,folderBackupConnected:null});
+ vm.runInContext(source.slice(source.indexOf('function backupReminderStatus('),source.indexOf('\nasync function snoozeBackupReminder('))+source.slice(source.indexOf('function renderFolderBackup('),source.indexOf('const folderBackup=createFolderBackup(')),context);
+ context.renderBackupReminder();assert.equal($('backupReminder').hidden,true);
+ const state={supported:true,connected:false,permission:'granted',pending:false,error:'',lastSyncedAt:0};
+ context.renderFolderBackup(state);assert.equal($('backupReminder').hidden,false);
+ context.renderFolderBackup({...state,connected:true});assert.equal($('backupReminder').hidden,true);
+ context.renderFolderBackup({...state,connected:true,permission:'prompt',error:'permission'});
+ assert.equal($('backupReminder').hidden,true);assert.equal($('folderNotice').hidden,false);
+ context.renderFolderBackup({...state,connected:true,error:'missing'});
+ assert.equal($('backupReminder').hidden,true);assert.equal($('folderNotice').hidden,false);
+ context.renderFolderBackup(state);assert.equal($('backupReminder').hidden,false);assert.equal($('folderNotice').hidden,true);
+ assert.equal(history.lastBackupAt,context.backupReminder.lastBackupAt);assert.equal(history.backupRevision,'old');
+});
 test('backup age reaches the threshold at 30 days and uses the last full backup',()=>{
  assert.equal(status(),null);
  assert.equal(status({startedAt:now-30*DAY}).overdue,true);
